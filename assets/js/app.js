@@ -47,6 +47,23 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('focus', unformatCurrency);
     });
 
+    // Initialize month/year dropdowns for reports
+    var monthSel = document.getElementById('month');
+    var yearSel = document.getElementById('year');
+    if (monthSel && yearSel) {
+        monthSel.addEventListener('change', function() {
+            fetchMonthlyReport(monthSel.value, yearSel.value);
+        });
+        yearSel.addEventListener('change', function() {
+            fetchMonthlyReport(monthSel.value, yearSel.value);
+        });
+        // Initial load
+        fetchMonthlyReport(monthSel.value, yearSel.value);
+    }
+
+    // Initialize responsive tables
+    initializeResponsiveTables();
+
     // Mobile swipe-to-delete functionality
     initializeSwipeToDelete();
     
@@ -357,21 +374,7 @@ function fetchMonthlyReport(month, year) {
             document.getElementById('monthly-report-error').style.display = 'block';
         });
 }
-// Add event listeners to month/year dropdowns to call fetchMonthlyReport when changed.
-document.addEventListener('DOMContentLoaded', function() {
-    var monthSel = document.getElementById('month');
-    var yearSel = document.getElementById('year');
-    if (monthSel && yearSel) {
-        monthSel.addEventListener('change', function() {
-            fetchMonthlyReport(monthSel.value, yearSel.value);
-        });
-        yearSel.addEventListener('change', function() {
-            fetchMonthlyReport(monthSel.value, yearSel.value);
-        });
-        // Initial load
-        fetchMonthlyReport(monthSel.value, yearSel.value);
-    }
-}); 
+// Month/year dropdown functionality is now handled in the main DOMContentLoaded listener 
 
 function fetchDepartmentReport(department) {
     var url = 'reports_ajax.php?action=department&department=' + encodeURIComponent(department || '');
@@ -628,10 +631,7 @@ function initializeResponsiveTables() {
     });
 }
 
-// Initialize responsive tables on load
-document.addEventListener('DOMContentLoaded', function() {
-    initializeResponsiveTables();
-});
+// Responsive tables initialization is now handled in the main DOMContentLoaded listener
 
 // Mobile table scroll functionality
 function initializeMobileTableScroll() {

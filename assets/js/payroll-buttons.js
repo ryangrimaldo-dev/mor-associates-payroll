@@ -94,19 +94,5 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Initialize dropdown functionality for all dropdown toggles
-    const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
-    dropdownToggles.forEach(toggle => {
-        toggle.addEventListener('click', function(e) {
-            // Let Bootstrap handle the dropdown toggle
-            // This is just to ensure the event is properly triggered
-            console.log('Dropdown toggle clicked');
-        });
-    });
-    
-    // Manually initialize Bootstrap dropdowns
-    var dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
-    var dropdownList = dropdownElementList.map(function (dropdownToggleEl) {
-        return new bootstrap.Dropdown(dropdownToggleEl);
-    });
+    // Dropdown initialization is handled by dropdown-init.js
 });

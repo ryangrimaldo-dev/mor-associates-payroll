@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - EarnMOR - It Pays to EarnMOR.</title>
+    <title>Register - MOR Payroll</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="assets/css/style.css" rel="stylesheet">
@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="text-center mb-4">
                             <i class="fas fa-user-plus fa-3x text-primary mb-3"></i>
                             <h2 class="text-primary">Create Account</h2>
-                            <p class="text-muted">Join the Payroll System</p>
+                            <p class="text-muted">Join the MOR Payroll System</p>
                         </div>
                         
                         <?php if ($error): ?>
@@ -175,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php endif; ?>
                         
                         <div class="text-center mt-3">
-                            <p>Already have an account? <a href="login.php" class="text-primary">Sign In</a></p>
+                            <p>Already have an account? <a href="login.php" class="a">Sign In</a></p>
                         </div>
                     </div>
                 </div>
