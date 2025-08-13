@@ -20,10 +20,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
 <nav class="navbar navbar-expand-lg">
     <div class="container">
         <a class="navbar-brand" href="index.php">
-            <div class="brand-icon">
-                <i class="fas fa-money-bill-wave"></i>
-            </div>
-            EarnMOR
+            <img src="assets/images/mor-logo.png" alt="MOR Logo" height="40" class="me-2">
+            MOR Payroll
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <i class="fas fa-bars"></i>

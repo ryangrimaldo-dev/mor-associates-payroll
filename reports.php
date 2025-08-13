@@ -686,7 +686,48 @@ function getDepartmentReport($department) {
                         </div>
                     </div>
                 </div>
-                
+                <div class="row">
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    <i class="fas fa-chart-line" style="font-size: 3rem; color: #17a2b8;"></i>
+                                </div>
+                                <h5 class="card-title">Annual Report</h5>
+                                <p class="card-text">Generate comprehensive annual payroll reports for the entire year.</p>
+                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#annualReportModal">
+                                    <i class="fas fa-chart-bar me-2"></i>Generate Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <i class="fas fa-calendar-alt fa-3x text-success mb-3"></i>
+                                <h5 class="card-title">Monthly Report</h5>
+                                <p class="card-text">View payroll summaries by month with trends and analysis.</p>
+                                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#monthlyReportModal">
+                                    <i class="fas fa-chart-line me-2"></i>View Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <i class="fas fa-building fa-3x text-info mb-3"></i>
+                                <h5 class="card-title">Department Report</h5>
+                                <p class="card-text">Analyze payroll data by department and position.</p>
+                                <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#departmentReportModal">
+                                    <i class="fas fa-users me-2"></i>View Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <!-- Quick Stats -->
                 <div class="row">
                     <div class="col-md-3 mb-4">

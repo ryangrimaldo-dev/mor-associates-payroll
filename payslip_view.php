@@ -14,6 +14,20 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 $payroll_id = intval($_GET['id']);
 $conn = getConnection();
 
+// Get the current pay period information to calculate accumulated earnings
+$stmt_accumulated = $conn->prepare("SELECT SUM(pr.basic_pay + pr.overtime_pay + pr.allowances) as accumulated_earnings 
+                               FROM payroll_records pr 
+                               JOIN employees e ON pr.employee_id = e.id 
+                               JOIN pay_periods pp ON pr.pay_period_id = pp.id 
+                               WHERE e.id = (SELECT employee_id FROM payroll_records WHERE id = ?) 
+                               AND YEAR(pp.end_date) = YEAR(CURDATE()) 
+                               AND pp.end_date <= (SELECT end_date FROM pay_periods WHERE id = 
+                                                 (SELECT pay_period_id FROM payroll_records WHERE id = ?))");
+$stmt_accumulated->bind_param("ii", $payroll_id, $payroll_id);
+$stmt_accumulated->execute();
+$accumulated_result = $stmt_accumulated->get_result();
+$accumulated_earnings = $accumulated_result->fetch_assoc()['accumulated_earnings'] ?? 0;
+
 $stmt = $conn->prepare("SELECT pr.*, e.first_name, e.last_name, e.employee_number, e.position, e.department, e.email, pp.period_name, pp.start_date, pp.end_date
                         FROM payroll_records pr
                         JOIN employees e ON pr.employee_id = e.id
@@ -96,7 +110,8 @@ function nf($n) { return '₱' . number_format($n, 2); }
         </div>
         <div class="row mt-3">
             <div class="col-md-6">
-                <div class="item"><span>13th Month Pay</span><span><?php echo nf($p['thirteenth_month_pay']); ?></span></div>
+                <div class="item"><span>Accumulated Earnings</span><span><?php echo nf($accumulated_earnings); ?></span></div>
+                <div class="item"><span>13th Month Pay</span><span><?php echo nf($accumulated_earnings / 12); ?></span></div>
             </div>
             <div class="col-md-6 text-end">
                 <div class="net-pay">NET PAY: <?php echo nf($p['net_pay']); ?></div>

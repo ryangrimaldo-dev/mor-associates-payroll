@@ -47,9 +47,7 @@ $user = $_SESSION['user'];
     <nav class="navbar navbar-expand-lg">
         <div class="container">
             <a class="navbar-brand" href="index.php">
-                <div class="brand-icon">
-                    <i class="fas fa-money-bill-wave"></i>
-                </div>
+                <img src="assets/images/mor-logo.png" alt="MOR Logo" height="40" class="me-2">
                 MOR Payroll
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
