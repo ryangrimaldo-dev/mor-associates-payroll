@@ -1,4 +1,38 @@
 <?php
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Set a custom error handler to catch fatal errors
+function fatal_error_handler() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        header('HTTP/1.1 500 Internal Server Error');
+        echo '<h1>Fatal Error</h1>';
+        echo '<p>A fatal error occurred: ' . htmlspecialchars($error['message']) . '</p>';
+        echo '<p>In file: ' . htmlspecialchars($error['file']) . ' on line ' . $error['line'] . '</p>';
+        
+        // Log error to file
+        $log_message = date('Y-m-d H:i:s') . ' - Fatal Error: ' . $error['message'] . ' in ' . $error['file'] . ' on line ' . $error['line'] . "\n";
+        error_log($log_message, 3, __DIR__ . '/error_log.txt');
+    }
+}
+register_shutdown_function('fatal_error_handler');
+
+// Set exception handler
+function exception_handler($exception) {
+    header('HTTP/1.1 500 Internal Server Error');
+    echo '<h1>Exception</h1>';
+    echo '<p>Uncaught exception: ' . htmlspecialchars($exception->getMessage()) . '</p>';
+    echo '<p>In file: ' . htmlspecialchars($exception->getFile()) . ' on line ' . $exception->getLine() . '</p>';
+    
+    // Log exception to file
+    $log_message = date('Y-m-d H:i:s') . ' - Exception: ' . $exception->getMessage() . ' in ' . $exception->getFile() . ' on line ' . $exception->getLine() . "\n";
+    error_log($log_message, 3, __DIR__ . '/error_log.txt');
+}
+set_exception_handler('exception_handler');
+
 require_once 'config/config.php';
 
 // Start session if not already started
@@ -68,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Create comprehensive reports table for all report types
 $conn->query("CREATE TABLE IF NOT EXISTS all_reports (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    report_type ENUM('annual', 'monthly', 'department', 'payroll_summary') NOT NULL,
+    report_type ENUM('annual', 'monthly', 'department', 'payroll_summary', 'sss', 'tax', 'philhealth') NOT NULL,
     report_title VARCHAR(255) NOT NULL,
     report_period VARCHAR(255) NOT NULL,
     file_path VARCHAR(255) NOT NULL,
@@ -196,7 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">Detailed Payroll Records</h3>';
                 $html .= '<table border="1" cellpadding="8" cellspacing="0" width="100%" style="border-collapse: collapse; font-size: 10px;">';
                 $html .= '<thead style="background-color: #01acc1; color: white;">';
-                $html .= '<tr><th>Period</th><th>Employee #</th><th>Name</th><th>Department</th><th>Basic Pay</th><th>Overtime</th><th>Allowances</th><th>Deductions</th><th>Net Pay</th></tr>';
+                $html .= '<tr><th>Period</th><th>Employee #</th><th>Name</th><th>Department</th><th>Basic Pay</th><th>Overtime</th><th>Allowances</th><th>SSS Deduction</th><th>PhilHealth Deduction</th><th>Pag-IBIG Deduction</th><th>Tax Deduction</th><th>Loans/Advances</th><th>SSS Loan</th><th>HDMF Loan</th><th>Late Deductions</th><th>Other Deductions</th><th>Net Pay</th></tr>';
                 $html .= '</thead><tbody>';
                 
                 foreach ($rows as $row) {
@@ -208,7 +242,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
                     $html .= '<td>₱' . number_format($row['overtime_pay'], 2) . '</td>';
                     $html .= '<td>₱' . number_format($row['allowances'], 2) . '</td>';
-                    $html .= '<td>₱' . number_format($row['total_deductions'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['sss_deduction'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['philhealth_deduction'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['pagibig_deduction'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['tax_deduction'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['loans_advances'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format(isset($row['sss_loan']) ? $row['sss_loan'] : 0, 2) . '</td>';
+                    $html .= '<td>₱' . number_format(isset($row['hdmf_loan']) ? $row['hdmf_loan'] : 0, 2) . '</td>';
+                    $html .= '<td>₱' . number_format(isset($row['late_deductions']) ? $row['late_deductions'] : 0, 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['other_deductions'], 2) . '</td>';
                     $html .= '<td style="font-weight: bold;">₱' . number_format($row['net_pay'], 2) . '</td>';
                     $html .= '</tr>';
                 }
@@ -251,8 +293,452 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Handle report generation
+// Handle report generation and deletion
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    // Handle SSS Report PDF generation
+    if ($_POST['action'] === 'export_sss_report') {
+        $month = intval($_POST['sss_month']);
+        $year = intval($_POST['sss_year']);
+        
+        if (!$month || !$year) {
+            $error = 'Please select a valid month and year.';
+        } else {
+            try {
+                // Fetch all employees with their SSS deductions for the selected month/year
+                $stmt = $conn->prepare("SELECT e.employee_number, e.first_name, e.last_name, pr.basic_pay, pr.sss_deduction 
+                                      FROM payroll_records pr 
+                                      JOIN employees e ON pr.employee_id = e.id 
+                                      JOIN pay_periods pp ON pr.pay_period_id = pp.id 
+                                      WHERE (MONTH(pp.start_date) = ? OR MONTH(pp.end_date) = ?) AND YEAR(pp.start_date) = ?");
+                $stmt->bind_param("iii", $month, $month, $year);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $rows = $result->fetch_all(MYSQLI_ASSOC);
+                
+                if (empty($rows)) {
+                    $error = 'No payroll data found for the selected month and year.';
+                    echo '<div class="alert alert-danger">' . $error . '</div>';
+                    
+                    // Define period_name before using it
+                    $month_name = date('F', mktime(0, 0, 0, $month, 1));
+                    $period_name = $month_name . ' ' . $year;
+                    
+                    // Create mPDF instance before using it
+                    require_once __DIR__ . '/vendor/autoload.php';
+                    
+                    // Check if mPDF class exists
+                    if (!class_exists('\\Mpdf\\Mpdf')) {
+                        // Try to load the class directly if autoload failed
+                        if (file_exists(__DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php')) {
+                            require_once __DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php';
+                        } else {
+                            throw new Exception('mPDF class not found. Please check your installation.');
+                        }
+                    }
+                    
+                    // Create mPDF instance with error handling
+                    try {
+                        // Use default configuration
+                        $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => 'A4']);
+                    } catch (\Exception $mpdfException) {
+                        throw new Exception('Failed to initialize mPDF: ' . $mpdfException->getMessage());
+                    }
+                    
+                    // Don't return, continue execution with a simple report
+                    $html = '<h2>SSS Contribution Report - ' . $period_name . '</h2>';
+                    $html .= '<p>No payroll data found for the selected month and year.</p>';
+                    
+                    $mpdf->WriteHTML($html);
+                    
+                    // Save PDF
+                    $pdf_dir = __DIR__ . '/reports/';
+                    if (!is_dir($pdf_dir)) mkdir($pdf_dir, 0777, true);
+                    $pdf_name = 'sss_report_' . $month . '_' . $year . '_' . date('Ymd_His') . '.pdf';
+                    $pdf_path = $pdf_dir . $pdf_name;
+                    $mpdf->Output($pdf_path, \Mpdf\Output\Destination::FILE);
+                    
+                    // Save report record
+                    $stmt = $conn->prepare("INSERT INTO all_reports (report_type, report_title, report_period, file_path, total_amount) VALUES (?, ?, ?, ?, ?)");
+                    $report_type = 'sss';
+                    $report_title = 'SSS Contribution Report';
+                    $total_sss = 0;
+                    $stmt->bind_param("ssssd", $report_type, $report_title, $period_name, $pdf_name, $total_sss);
+                    
+                    if ($stmt->execute()) {
+                        $message = 'SSS report for ' . $period_name . ' generated successfully. <a href="reports/' . $pdf_name . '" target="_blank" class="btn btn-sm btn-primary ms-2"><i class="fas fa-eye me-1"></i>View Report</a>';
+                        // Removed the echo statement to prevent duplicate notification
+                    } else {
+                        $error = 'Failed to save report record: ' . $stmt->error;
+                    }
+                    return;
+                }
+            
+                // Generate PDF using mPDF
+                require_once __DIR__ . '/vendor/autoload.php';
+                
+                // Check if mPDF class exists
+                if (!class_exists('\\Mpdf\\Mpdf')) {
+                    // Try to load the class directly if autoload failed
+                    if (file_exists(__DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php')) {
+                        require_once __DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php';
+                    } else {
+                        throw new Exception('mPDF class not found. Please check your installation.');
+                    }
+                }
+                
+                // Create mPDF instance with error handling
+                try {
+                    // Use default configuration
+                    $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => 'A4']);
+                } catch (\Exception $mpdfException) {
+                    throw new Exception('Failed to initialize mPDF: ' . $mpdfException->getMessage());
+                }
+                
+                $month_name = date('F', mktime(0, 0, 0, $month, 1));
+                $period_name = $month_name . ' ' . $year;
+            
+            $html = '<h2>SSS Contribution Report - ' . $period_name . '</h2>';
+            $html .= '<table border="1" cellpadding="5" cellspacing="0" width="100%">';
+            $html .= '<thead><tr><th>Employee #</th><th>Name</th><th>Basic Pay</th><th>SSS Deduction</th></tr></thead><tbody>';
+            
+            $total_sss = 0;
+            foreach ($rows as $row) {
+                $html .= '<tr>';
+                $html .= '<td>' . htmlspecialchars($row['employee_number']) . '</td>';
+                $html .= '<td>' . htmlspecialchars($row['first_name'] . ' ' . $row['last_name']) . '</td>';
+                $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
+                $html .= '<td>₱' . number_format($row['sss_deduction'], 2) . '</td>';
+                $html .= '</tr>';
+                $total_sss += $row['sss_deduction'];
+            }
+            
+            $html .= '</tbody>';
+            $html .= '<tfoot><tr><th colspan="3" style="text-align:right">Total SSS Contributions:</th><th>₱' . number_format($total_sss, 2) . '</th></tr></tfoot>';
+            $html .= '</table>';
+            
+            $mpdf->WriteHTML($html);
+            
+            // Save PDF
+            $pdf_dir = __DIR__ . '/reports/';
+            if (!is_dir($pdf_dir)) mkdir($pdf_dir, 0777, true);
+            $pdf_name = 'sss_report_' . $month . '_' . $year . '_' . date('Ymd_His') . '.pdf';
+            $pdf_path = $pdf_dir . $pdf_name;
+            $mpdf->Output($pdf_path, \Mpdf\Output\Destination::FILE);
+            
+            // Save report record
+            $stmt = $conn->prepare("INSERT INTO all_reports (report_type, report_title, report_period, file_path, total_amount) VALUES (?, ?, ?, ?, ?)");
+            $report_type = 'sss';
+            $report_title = 'SSS Contribution Report';
+            $stmt->bind_param("ssssd", $report_type, $report_title, $period_name, $pdf_name, $total_sss);
+            
+            if ($stmt->execute()) {
+                $message = 'SSS report for ' . $period_name . ' generated successfully. <a href="reports/' . $pdf_name . '" target="_blank" class="btn btn-sm btn-primary ms-2"><i class="fas fa-eye me-1"></i>View Report</a>';
+                // Removed the echo statement to prevent duplicate notification
+            } else {
+                $error = 'Failed to save report record: ' . $stmt->error;
+            }
+            } catch (Exception $e) {
+                $error = 'Failed to generate SSS report: ' . $e->getMessage();
+            }
+        }
+    }
+    
+    // Handle Tax Report PDF generation
+    if ($_POST['action'] === 'export_tax_report') {
+        $month = intval($_POST['tax_month']);
+        $year = intval($_POST['tax_year']);
+        
+        if (!$month || !$year) {
+            $error = 'Please select a valid month and year.';
+        } else {
+            try {
+                // Fetch all employees with their tax deductions for the selected month/year
+                $stmt = $conn->prepare("SELECT e.employee_number, e.first_name, e.last_name, pr.basic_pay, pr.tax_deduction 
+                                      FROM payroll_records pr 
+                                      JOIN employees e ON pr.employee_id = e.id 
+                                      JOIN pay_periods pp ON pr.pay_period_id = pp.id 
+                                      WHERE (MONTH(pp.start_date) = ? OR MONTH(pp.end_date) = ?) AND YEAR(pp.start_date) = ?");
+                $stmt->bind_param("iii", $month, $month, $year);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $rows = $result->fetch_all(MYSQLI_ASSOC);
+            
+                if (empty($rows)) {
+                    $error = 'No payroll data found for the selected month and year.';
+                    echo '<div class="alert alert-danger">' . $error . '</div>';
+                    
+                    // Define period_name before using it
+                    $month_name = date('F', mktime(0, 0, 0, $month, 1));
+                    $period_name = $month_name . ' ' . $year;
+                    
+                    // Create mPDF instance before using it
+                    require_once __DIR__ . '/vendor/autoload.php';
+                    
+                    // Check if mPDF class exists
+                    if (!class_exists('\\Mpdf\\Mpdf')) {
+                        // Try to load the class directly if autoload failed
+                        if (file_exists(__DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php')) {
+                            require_once __DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php';
+                        } else {
+                            throw new Exception('mPDF class not found. Please check your installation.');
+                        }
+                    }
+                    
+                    // Create mPDF instance with error handling
+                    try {
+                        // Use default configuration
+                        $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => 'A4']);
+                    } catch (\Exception $mpdfException) {
+                        throw new Exception('Failed to initialize mPDF: ' . $mpdfException->getMessage());
+                    }
+                    
+                    // Don't return, continue execution with a simple report
+                    $html = '<h2>Tax Deduction Report - ' . $period_name . '</h2>';
+                    $html .= '<p>No payroll data found for the selected month and year.</p>';
+                    
+                    $mpdf->WriteHTML($html);
+                    
+                    // Save PDF
+                    $pdf_dir = __DIR__ . '/reports/';
+                    if (!is_dir($pdf_dir)) mkdir($pdf_dir, 0777, true);
+                    $pdf_name = 'tax_report_' . $month . '_' . $year . '_' . date('Ymd_His') . '.pdf';
+                    $pdf_path = $pdf_dir . $pdf_name;
+                    $mpdf->Output($pdf_path, \Mpdf\Output\Destination::FILE);
+                    
+                    // Save report record
+                    $stmt = $conn->prepare("INSERT INTO all_reports (report_type, report_title, report_period, file_path, total_amount) VALUES (?, ?, ?, ?, ?)");
+                    $report_type = 'tax';
+                    $report_title = 'Tax Deduction Report';
+                    $total_tax = 0;
+                    $stmt->bind_param("ssssd", $report_type, $report_title, $period_name, $pdf_name, $total_tax);
+                    
+                    if ($stmt->execute()) {
+                $message = 'Tax report for ' . $period_name . ' generated successfully. <a href="reports/' . $pdf_name . '" target="_blank" class="btn btn-sm btn-primary ms-2"><i class="fas fa-eye me-1"></i>View Report</a>';
+                // Removed the echo statement to prevent duplicate notification
+            } else {
+                $error = 'Failed to save report record: ' . $stmt->error;
+            }
+                    return;
+                }
+                
+                // Generate PDF using mPDF
+                require_once __DIR__ . '/vendor/autoload.php';
+                
+                // Check if mPDF class exists
+                if (!class_exists('\\Mpdf\\Mpdf')) {
+                    // Try to load the class directly if autoload failed
+                    if (file_exists(__DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php')) {
+                        require_once __DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php';
+                    } else {
+                        throw new Exception('mPDF class not found. Please check your installation.');
+                    }
+                }
+                
+                // Create mPDF instance with error handling
+                try {
+                    // Use default configuration
+                    $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => 'A4']);
+                } catch (\Exception $mpdfException) {
+                    throw new Exception('Failed to initialize mPDF: ' . $mpdfException->getMessage());
+                }
+                
+                $month_name = date('F', mktime(0, 0, 0, $month, 1));
+                $period_name = $month_name . ' ' . $year;
+            
+                $html = '<h2>Tax Deduction Report - ' . $period_name . '</h2>';
+                $html .= '<table border="1" cellpadding="5" cellspacing="0" width="100%">';
+                $html .= '<thead><tr><th>Employee #</th><th>Name</th><th>Basic Pay</th><th>Tax Deduction</th></tr></thead><tbody>';
+                
+                $total_tax = 0;
+                foreach ($rows as $row) {
+                    $html .= '<tr>';
+                    $html .= '<td>' . htmlspecialchars($row['employee_number']) . '</td>';
+                    $html .= '<td>' . htmlspecialchars($row['first_name'] . ' ' . $row['last_name']) . '</td>';
+                    $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['tax_deduction'], 2) . '</td>';
+                    $html .= '</tr>';
+                    $total_tax += $row['tax_deduction'];
+                }
+            
+                $html .= '</tbody>';
+                $html .= '<tfoot><tr><th colspan="3" style="text-align:right">Total Tax Deductions:</th><th>₱' . number_format($total_tax, 2) . '</th></tr></tfoot>';
+                $html .= '</table>';
+                
+                $mpdf->WriteHTML($html);
+                
+                // Save PDF
+                $pdf_dir = __DIR__ . '/reports/';
+                if (!is_dir($pdf_dir)) mkdir($pdf_dir, 0777, true);
+                $pdf_name = 'tax_report_' . $month . '_' . $year . '_' . date('Ymd_His') . '.pdf';
+                $pdf_path = $pdf_dir . $pdf_name;
+                $mpdf->Output($pdf_path, \Mpdf\Output\Destination::FILE);
+            
+                // Save report record
+                $stmt = $conn->prepare("INSERT INTO all_reports (report_type, report_title, report_period, file_path, total_amount) VALUES (?, ?, ?, ?, ?)");
+                $report_type = 'tax';
+                $report_title = 'Tax Deduction Report';
+                $stmt->bind_param("ssssd", $report_type, $report_title, $period_name, $pdf_name, $total_tax);
+                
+                if ($stmt->execute()) {
+                    $message = 'Tax report for ' . $period_name . ' generated successfully. <a href="reports/' . $pdf_name . '" target="_blank" class="btn btn-sm btn-primary ms-2"><i class="fas fa-eye me-1"></i>View Report</a>';
+                    // Removed the echo statement to prevent duplicate notification
+                } else {
+                    $error = 'Failed to save report record: ' . $stmt->error;
+                }
+            } catch (Exception $e) {
+                $error = 'Failed to generate Tax report: ' . $e->getMessage();
+            }
+        }
+    }
+    
+    // Handle PhilHealth Report PDF generation
+    if ($_POST['action'] === 'export_philhealth_report') {
+        $month = intval($_POST['philhealth_month']);
+        $year = intval($_POST['philhealth_year']);
+        
+        if (!$month || !$year) {
+            $error = 'Please select a valid month and year.';
+        } else {
+            try {
+                // Fetch all employees with their PhilHealth deductions for the selected month/year
+                $stmt = $conn->prepare("SELECT e.employee_number, e.first_name, e.last_name, pr.basic_pay, pr.philhealth_deduction 
+                                      FROM payroll_records pr 
+                                      JOIN employees e ON pr.employee_id = e.id 
+                                      JOIN pay_periods pp ON pr.pay_period_id = pp.id 
+                                      WHERE (MONTH(pp.start_date) = ? OR MONTH(pp.end_date) = ?) AND YEAR(pp.start_date) = ?");
+                $stmt->bind_param("iii", $month, $month, $year);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $rows = $result->fetch_all(MYSQLI_ASSOC);
+            
+                if (empty($rows)) {
+                    $error = 'No payroll data found for the selected month and year.';
+                    echo '<div class="alert alert-danger">' . $error . '</div>';
+                    
+                    // Define period_name before using it
+                    $month_name = date('F', mktime(0, 0, 0, $month, 1));
+                    $period_name = $month_name . ' ' . $year;
+                    
+                    // Create mPDF instance before using it
+                    require_once __DIR__ . '/vendor/autoload.php';
+                    
+                    // Check if mPDF class exists
+                    if (!class_exists('\\Mpdf\\Mpdf')) {
+                        // Try to load the class directly if autoload failed
+                        if (file_exists(__DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php')) {
+                            require_once __DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php';
+                        } else {
+                            throw new Exception('mPDF class not found. Please check your installation.');
+                        }
+                    }
+                    
+                    // Create mPDF instance with error handling
+                    try {
+                        // Use default configuration
+                        $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => 'A4']);
+                    } catch (\Exception $mpdfException) {
+                        throw new Exception('Failed to initialize mPDF: ' . $mpdfException->getMessage());
+                    }
+                    
+                    // Don't return, continue execution with a simple report
+                    $html = '<h2>PhilHealth Contribution Report - ' . $period_name . '</h2>';
+                    $html .= '<p>No payroll data found for the selected month and year.</p>';
+                    
+                    $mpdf->WriteHTML($html);
+                    
+                    // Save PDF
+                    $pdf_dir = __DIR__ . '/reports/';
+                    if (!is_dir($pdf_dir)) mkdir($pdf_dir, 0777, true);
+                    $pdf_name = 'philhealth_report_' . $month . '_' . $year . '_' . date('Ymd_His') . '.pdf';
+                    $pdf_path = $pdf_dir . $pdf_name;
+                    $mpdf->Output($pdf_path, \Mpdf\Output\Destination::FILE);
+                    
+                    // Save report record
+                    $stmt = $conn->prepare("INSERT INTO all_reports (report_type, report_title, report_period, file_path, total_amount) VALUES (?, ?, ?, ?, ?)");
+                    $report_type = 'philhealth';
+                    $report_title = 'PhilHealth Contribution Report';
+                    $total_philhealth = 0;
+                    $stmt->bind_param("ssssd", $report_type, $report_title, $period_name, $pdf_name, $total_philhealth);
+                    
+                    if ($stmt->execute()) {
+                $message = 'PhilHealth report for ' . $period_name . ' generated successfully. <a href="reports/' . $pdf_name . '" target="_blank" class="btn btn-sm btn-primary ms-2"><i class="fas fa-eye me-1"></i>View Report</a>';
+                // Removed the echo statement to prevent duplicate notification
+            } else {
+                $error = 'Failed to save report record: ' . $stmt->error;
+            }
+                    return;
+                }
+                
+                // Generate PDF using mPDF
+                require_once __DIR__ . '/vendor/autoload.php';
+                
+                // Check if mPDF class exists
+                if (!class_exists('\\Mpdf\\Mpdf')) {
+                    // Try to load the class directly if autoload failed
+                    if (file_exists(__DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php')) {
+                        require_once __DIR__ . '/vendor/mpdf/mpdf/src/Mpdf.php';
+                    } else {
+                        throw new Exception('mPDF class not found. Please check your installation.');
+                    }
+                }
+                
+                // Create mPDF instance with error handling
+                try {
+                    // Use default configuration
+                    $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => 'A4']);
+                } catch (\Exception $mpdfException) {
+                    throw new Exception('Failed to initialize mPDF: ' . $mpdfException->getMessage());
+                }
+                
+                $month_name = date('F', mktime(0, 0, 0, $month, 1));
+                $period_name = $month_name . ' ' . $year;
+                
+                $html = '<h2>PhilHealth Contribution Report - ' . $period_name . '</h2>';
+                $html .= '<table border="1" cellpadding="5" cellspacing="0" width="100%">';
+                $html .= '<thead><tr><th>Employee #</th><th>Name</th><th>Basic Pay</th><th>PhilHealth Deduction</th></tr></thead><tbody>';
+            
+                $total_philhealth = 0;
+                foreach ($rows as $row) {
+                    $html .= '<tr>';
+                    $html .= '<td>' . htmlspecialchars($row['employee_number']) . '</td>';
+                    $html .= '<td>' . htmlspecialchars($row['first_name'] . ' ' . $row['last_name']) . '</td>';
+                    $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['philhealth_deduction'], 2) . '</td>';
+                    $html .= '</tr>';
+                    $total_philhealth += $row['philhealth_deduction'];
+                }
+            
+                $html .= '</tbody>';
+                $html .= '<tfoot><tr><th colspan="3" style="text-align:right">Total PhilHealth Contributions:</th><th>₱' . number_format($total_philhealth, 2) . '</th></tr></tfoot>';
+                $html .= '</table>';
+                
+                $mpdf->WriteHTML($html);
+                
+                // Save PDF
+                $pdf_dir = __DIR__ . '/reports/';
+                if (!is_dir($pdf_dir)) mkdir($pdf_dir, 0777, true);
+                $pdf_name = 'philhealth_report_' . $month . '_' . $year . '_' . date('Ymd_His') . '.pdf';
+                $pdf_path = $pdf_dir . $pdf_name;
+                $mpdf->Output($pdf_path, \Mpdf\Output\Destination::FILE);
+                
+                // Save report record
+                $stmt = $conn->prepare("INSERT INTO all_reports (report_type, report_title, report_period, file_path, total_amount) VALUES (?, ?, ?, ?, ?)");
+                $report_type = 'philhealth';
+                $report_title = 'PhilHealth Contribution Report';
+                $stmt->bind_param("ssssd", $report_type, $report_title, $period_name, $pdf_name, $total_philhealth);
+                
+                if ($stmt->execute()) {
+                    $message = 'PhilHealth report for ' . $period_name . ' generated successfully. <a href="reports/' . $pdf_name . '" target="_blank" class="btn btn-sm btn-primary ms-2"><i class="fas fa-eye me-1"></i>View Report</a>';
+                    // Removed the echo statement to prevent duplicate notification
+                } else {
+                    $error = 'Failed to save report record: ' . $stmt->error;
+                }
+            } catch (Exception $e) {
+                $error = 'Failed to generate PhilHealth report: ' . $e->getMessage();
+            }
+        }
+    }
+    
     switch ($_POST['action']) {
         case 'generate_payroll_summary':
             $pay_period_id = intval($_POST['pay_period_id']);
@@ -365,18 +851,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">Detailed Payroll Records</h3>';
                 $html .= '<table border="1" cellpadding="8" cellspacing="0" width="100%" style="border-collapse: collapse; font-size: 10px;">';
                 $html .= '<thead style="background-color: #01acc1; color: white;">';
-                $html .= '<tr><th>Employee #</th><th>Name</th><th>Department</th><th>Basic Pay</th><th>Overtime</th><th>Allowances</th><th>Deductions</th><th>Net Pay</th></tr>';
+                $html .= '<tr><th>Period Name</th><th>Employee #</th><th>Name</th><th>Department</th><th>Basic Pay</th><th>Overtime</th><th>Allowances</th><th>SSS Deduction</th><th>PhilHealth Deduction</th><th>Pag-IBIG Deduction</th><th>Tax Deduction</th><th>Loans/Advances</th><th>SSS Loan</th><th>HDMF Loan</th><th>Late Deductions</th><th>Other Deductions</th><th>Net Pay</th></tr>';
                 $html .= '</thead><tbody>';
                 
                 foreach ($rows as $row) {
                     $html .= '<tr>';
+                    $html .= '<td>' . htmlspecialchars($row['period_name']) . '</td>';
                     $html .= '<td>' . htmlspecialchars($row['employee_number']) . '</td>';
                     $html .= '<td>' . htmlspecialchars($row['first_name'] . ' ' . $row['last_name']) . '</td>';
                     $html .= '<td>' . htmlspecialchars($row['department']) . '</td>';
                     $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
                     $html .= '<td>₱' . number_format($row['overtime_pay'], 2) . '</td>';
                     $html .= '<td>₱' . number_format($row['allowances'], 2) . '</td>';
-                    $html .= '<td>₱' . number_format($row['total_deductions'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['sss_deduction'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['philhealth_deduction'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['pagibig_deduction'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['tax_deduction'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['loans_advances'], 2) . '</td>';
+                    $html .= '<td>₱' . number_format(isset($row['sss_loan']) ? $row['sss_loan'] : 0, 2) . '</td>';
+                    $html .= '<td>₱' . number_format(isset($row['hdmf_loan']) ? $row['hdmf_loan'] : 0, 2) . '</td>';
+                    $html .= '<td>₱' . number_format(isset($row['late_deductions']) ? $row['late_deductions'] : 0, 2) . '</td>';
+                    $html .= '<td>₱' . number_format($row['other_deductions'], 2) . '</td>';
                     $html .= '<td style="font-weight: bold;">₱' . number_format($row['net_pay'], 2) . '</td>';
                     $html .= '</tr>';
                 }
@@ -463,7 +958,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">Detailed Payroll Records</h3>';
             $html .= '<table border="1" cellpadding="8" cellspacing="0" width="100%" style="border-collapse: collapse; font-size: 10px;">';
             $html .= '<thead style="background-color: #01acc1; color: white;">';
-            $html .= '<tr><th>Employee #</th><th>Name</th><th>Department</th><th>Basic Pay</th><th>Overtime</th><th>Allowances</th><th>Deductions</th><th>Net Pay</th></tr>';
+            $html .= '<tr><th>Employee #</th><th>Name</th><th>Department</th><th>Basic Pay</th><th>Overtime</th><th>Allowances</th><th>SSS Deduction</th><th>PhilHealth Deduction</th><th>Pag-IBIG Deduction</th><th>Tax Deduction</th><th>Loans/Advances</th><th>SSS Loan</th><th>HDMF Loan</th><th>Late Deductions</th><th>Other Deductions</th><th>Net Pay</th></tr>';
             $html .= '</thead><tbody>';
             
             foreach ($rows as $row) {
@@ -474,7 +969,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
                 $html .= '<td>₱' . number_format($row['overtime_pay'], 2) . '</td>';
                 $html .= '<td>₱' . number_format($row['allowances'], 2) . '</td>';
-                $html .= '<td>₱' . number_format($row['total_deductions'], 2) . '</td>';
+                $html .= '<td>₱' . number_format($row['sss_deduction'], 2) . '</td>';
+                $html .= '<td>₱' . number_format($row['philhealth_deduction'], 2) . '</td>';
+                $html .= '<td>₱' . number_format($row['pagibig_deduction'], 2) . '</td>';
+                $html .= '<td>₱' . number_format($row['tax_deduction'], 2) . '</td>';
+                $html .= '<td>₱' . number_format($row['loans_advances'], 2) . '</td>';
+                $html .= '<td>₱' . number_format(isset($row['sss_loan']) ? $row['sss_loan'] : 0, 2) . '</td>';
+                $html .= '<td>₱' . number_format(isset($row['hdmf_loan']) ? $row['hdmf_loan'] : 0, 2) . '</td>';
+                $html .= '<td>₱' . number_format(isset($row['late_deductions']) ? $row['late_deductions'] : 0, 2) . '</td>';
+                $html .= '<td>₱' . number_format($row['other_deductions'], 2) . '</td>';
                 $html .= '<td style="font-weight: bold;">₱' . number_format($row['net_pay'], 2) . '</td>';
                 $html .= '</tr>';
             }
@@ -652,7 +1155,7 @@ function getDepartmentReport($department) {
                                     <i class="fas fa-chart-line" style="font-size: 3rem; color: #17a2b8;"></i>
                                 </div>
                                 <h5 class="card-title">Annual Report</h5>
-                                <p class="card-text">Generate comprehensive annual payroll reports for the entire year.</p>
+                                <p class="card-text">Generate annual payroll reports.</p>
                                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#annualReportModal">
                                     <i class="fas fa-chart-bar me-2"></i>Generate Report
                                 </button>
@@ -665,7 +1168,7 @@ function getDepartmentReport($department) {
                             <div class="card-body text-center">
                                 <i class="fas fa-calendar-alt fa-3x text-success mb-3"></i>
                                 <h5 class="card-title">Monthly Report</h5>
-                                <p class="card-text">View payroll summaries by month with trends and analysis.</p>
+                                <p class="card-text">View monthly payroll trends and analysis.</p>
                                 <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#monthlyReportModal">
                                     <i class="fas fa-chart-line me-2"></i>View Report
                                 </button>
@@ -686,17 +1189,17 @@ function getDepartmentReport($department) {
                         </div>
                     </div>
                 </div>
+                
+                <!-- Additional Reports Row -->
                 <div class="row">
                     <div class="col-md-4 mb-4">
                         <div class="card">
                             <div class="card-body text-center">
-                                <div class="mb-3">
-                                    <i class="fas fa-chart-line" style="font-size: 3rem; color: #17a2b8;"></i>
-                                </div>
-                                <h5 class="card-title">Annual Report</h5>
-                                <p class="card-text">Generate comprehensive annual payroll reports for the entire year.</p>
-                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#annualReportModal">
-                                    <i class="fas fa-chart-bar me-2"></i>Generate Report
+                                <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
+                                <h5 class="card-title">SSS Report</h5>
+                                <p class="card-text">View SSS contributions for all employees.</p>
+                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sssReportModal">
+                                    <i class="fas fa-file-invoice me-2"></i>View Report
                                 </button>
                             </div>
                         </div>
@@ -705,11 +1208,11 @@ function getDepartmentReport($department) {
                     <div class="col-md-4 mb-4">
                         <div class="card">
                             <div class="card-body text-center">
-                                <i class="fas fa-calendar-alt fa-3x text-success mb-3"></i>
-                                <h5 class="card-title">Monthly Report</h5>
-                                <p class="card-text">View payroll summaries by month with trends and analysis.</p>
-                                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#monthlyReportModal">
-                                    <i class="fas fa-chart-line me-2"></i>View Report
+                                <i class="fas fa-file-invoice-dollar fa-3x text-success mb-3"></i>
+                                <h5 class="card-title">Tax Report</h5>
+                                <p class="card-text">View tax deductions for all employees.</p>
+                                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#taxReportModal">
+                                    <i class="fas fa-file-invoice me-2"></i>View Report
                                 </button>
                             </div>
                         </div>
@@ -718,16 +1221,17 @@ function getDepartmentReport($department) {
                     <div class="col-md-4 mb-4">
                         <div class="card">
                             <div class="card-body text-center">
-                                <i class="fas fa-building fa-3x text-info mb-3"></i>
-                                <h5 class="card-title">Department Report</h5>
-                                <p class="card-text">Analyze payroll data by department and position.</p>
-                                <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#departmentReportModal">
-                                    <i class="fas fa-users me-2"></i>View Report
+                                <i class="fas fa-heartbeat fa-3x text-danger mb-3"></i>
+                                <h5 class="card-title">PhilHealth Report</h5>
+                                <p class="card-text">View PhilHealth contributions for all employees.</p>
+                                <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#philhealthReportModal">
+                                    <i class="fas fa-file-invoice me-2"></i>View Report
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
+                
                 <!-- Quick Stats -->
                 <div class="row">
                     <div class="col-md-3 mb-4">
@@ -838,6 +1342,21 @@ function getDepartmentReport($department) {
                                                     $type_display = 'Department Report';
                                                     $type_icon = 'fa-building';
                                                     $type_color = 'text-warning';
+                                                    break;
+                                                case 'sss':
+                                                    $type_display = 'SSS Report';
+                                                    $type_icon = 'fa-shield-alt';
+                                                    $type_color = 'text-danger';
+                                                    break;
+                                                case 'tax':
+                                                    $type_display = 'Tax Report';
+                                                    $type_icon = 'fa-file-invoice-dollar';
+                                                    $type_color = 'text-dark';
+                                                    break;
+                                                case 'philhealth':
+                                                    $type_display = 'PhilHealth Report';
+                                                    $type_icon = 'fa-heartbeat';
+                                                    $type_color = 'text-danger';
                                                     break;
                                                 default:
                                                     $type_display = 'Payroll Summary';
@@ -1068,6 +1587,135 @@ function getDepartmentReport($department) {
                         </button>
                     </form>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SSS Report Modal -->
+    <div class="modal fade" id="sssReportModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-shield-alt me-2"></i>SSS Report
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <p class="text-muted">Generate a report of SSS contributions for all employees.</p>
+                        <div class="mb-3">
+                            <label for="sss_month" class="form-label">Month</label>
+                            <select class="form-select" id="sss_month" name="sss_month">
+                                <?php for ($i = 1; $i <= 12; $i++): ?>
+                                    <option value="<?php echo $i; ?>" <?php echo ($i == date('n')) ? 'selected' : ''; ?>>
+                                        <?php echo date('F', mktime(0, 0, 0, $i, 1)); ?>
+                                    </option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sss_year" class="form-label">Year</label>
+                            <select class="form-select" id="sss_year" name="sss_year">
+                                <?php for ($i = date('Y'); $i >= date('Y') - 5; $i--): ?>
+                                    <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" name="action" value="export_sss_report" class="btn btn-primary">
+                            <i class="fas fa-download me-2"></i>Generate SSS Report
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tax Report Modal -->
+    <div class="modal fade" id="taxReportModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-invoice-dollar me-2"></i>Tax Report
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <p class="text-muted">Generate a report of tax deductions for all employees.</p>
+                        <div class="mb-3">
+                            <label for="tax_month" class="form-label">Month</label>
+                            <select class="form-select" id="tax_month" name="tax_month">
+                                <?php for ($i = 1; $i <= 12; $i++): ?>
+                                    <option value="<?php echo $i; ?>" <?php echo ($i == date('n')) ? 'selected' : ''; ?>>
+                                        <?php echo date('F', mktime(0, 0, 0, $i, 1)); ?>
+                                    </option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="tax_year" class="form-label">Year</label>
+                            <select class="form-select" id="tax_year" name="tax_year">
+                                <?php for ($i = date('Y'); $i >= date('Y') - 5; $i--): ?>
+                                    <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" name="action" value="export_tax_report" class="btn btn-success">
+                            <i class="fas fa-download me-2"></i>Generate Tax Report
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- PhilHealth Report Modal -->
+    <div class="modal fade" id="philhealthReportModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-heartbeat me-2"></i>PhilHealth Report
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <p class="text-muted">Generate a report of PhilHealth contributions for all employees.</p>
+                        <div class="mb-3">
+                            <label for="philhealth_month" class="form-label">Month</label>
+                            <select class="form-select" id="philhealth_month" name="philhealth_month">
+                                <?php for ($i = 1; $i <= 12; $i++): ?>
+                                    <option value="<?php echo $i; ?>" <?php echo ($i == date('n')) ? 'selected' : ''; ?>>
+                                        <?php echo date('F', mktime(0, 0, 0, $i, 1)); ?>
+                                    </option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="philhealth_year" class="form-label">Year</label>
+                            <select class="form-select" id="philhealth_year" name="philhealth_year">
+                                <?php for ($i = date('Y'); $i >= date('Y') - 5; $i--): ?>
+                                    <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" name="action" value="export_philhealth_report" class="btn btn-danger">
+                            <i class="fas fa-download me-2"></i>Generate PhilHealth Report
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

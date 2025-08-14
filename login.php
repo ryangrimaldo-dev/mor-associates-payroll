@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="card shadow">
                     <div class="card-body p-5">
                         <div class="text-center mb-4">
-                            <i class="fas fa-money-bill-wave fa-3x text-primary mb-3"></i>
+                            <img src="assets/images/mor-logo.png" alt="MOR Logo" height="60" class="me-2">
                             <h2 class="text-primary">MOR Payroll</h2>
                             <p class="text-muted">Sign in to your account</p>
                         </div>

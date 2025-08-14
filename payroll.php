@@ -247,22 +247,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
                 
             case 'calculate_payroll':
-                $pay_period_id = intval($_POST['pay_period_id']);
-                $employee_id = intval($_POST['employee_id']);
-                $days_worked = floatval($_POST['days_worked']);
-                $late_minutes = floatval($_POST['late_minutes']);
+                $pay_period_id = intval($_POST['pay_period_id'] ?? 0);
+                $employee_id = intval($_POST['employee_id'] ?? 0);
+                $days_worked = floatval($_POST['days_worked'] ?? 0);
+                $late_minutes = floatval($_POST['late_minutes'] ?? 0);
                 $overtime_entries_json = isset($_POST['overtime_entries_json']) ? $_POST['overtime_entries_json'] : '[]';
                 $overtime_entries = json_decode($overtime_entries_json, true);
-                $allowances = floatval($_POST['allowances']);
-                $additional_payment = floatval($_POST['additional_payment']);
-                $sss_deduction = floatval($_POST['sss_deduction']);
-                $philhealth_deduction = floatval($_POST['philhealth_deduction']);
-                $pagibig_deduction = floatval($_POST['pagibig_deduction']);
-                $tax_deduction = floatval($_POST['tax_deduction']);
-                $other_deductions = floatval($_POST['other_deductions']);
-                $loans_advances = floatval($_POST['loans_advances']);
-                $sss_loan = floatval($_POST['sss_loan']);
-                $hdmf_loan = floatval($_POST['hdmf_loan']);
+                $allowances = floatval($_POST['allowances'] ?? 0);
+                $additional_payment = floatval($_POST['additional_payment'] ?? 0);
+                $sss_deduction = floatval($_POST['sss_deduction'] ?? 0);
+                $philhealth_deduction = floatval($_POST['philhealth_deduction'] ?? 0);
+                $pagibig_deduction = floatval($_POST['pagibig_deduction'] ?? 0);
+                $tax_deduction = floatval($_POST['tax_deduction'] ?? 0);
+                $other_deductions = floatval($_POST['other_deductions'] ?? 0);
+                $loans_advances = floatval($_POST['loans_advances'] ?? 0);
+                $sss_loan = floatval($_POST['sss_loan'] ?? 0);
+                $hdmf_loan = floatval($_POST['hdmf_loan'] ?? 0);
                 
                 // Calculate total overtime pay from entries
                 $overtime_pay = 0;
@@ -323,8 +323,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // Calculate payroll components
-                // Note: daily_rate in database is always stored as daily rate (monthly rates are converted during employee creation)
-                $basic_pay = round($daily_rate * $days_worked, 2) + $additional_payment;
+                // Process days worked entries JSON to calculate accurate basic pay
+                $days_worked_entries_json = isset($_POST['days_worked_entries_json']) ? $_POST['days_worked_entries_json'] : '[]';
+                $days_worked_entries = json_decode($days_worked_entries_json, true);
+                
+                $basic_pay = 0;
+                if (!empty($days_worked_entries) && is_array($days_worked_entries)) {
+                    // Calculate basic pay from days worked entries (matches frontend logic)
+                    foreach ($days_worked_entries as $entry) {
+                        $days = floatval($entry['days'] ?? 0);
+                        $rate = floatval($entry['rate'] ?? $daily_rate);
+                        $basic_pay += $days * $rate;
+                    }
+                } else {
+                    // Fallback to simple calculation if no entries provided
+                    $basic_pay = $daily_rate * $days_worked;
+                }
+                
+                $basic_pay = round($basic_pay, 2) + $additional_payment;
                 // Overtime pay is already calculated from the JSON entries
                 
                 // Calculate late deduction: (late time / 8) / 60 * daily rate
@@ -876,9 +892,51 @@ $payroll_records = $conn->query("
                                     <div class="form-control-plaintext" id="daily_rate_display">₱0.00</div>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="days_worked" class="form-label">Days Worked *</label>
-                                    <input type="number" step="0.01" class="form-control" id="days_worked" name="days_worked" required onchange="calculatePayroll(); document.getElementById('deduction_info').innerHTML = '';">
-                                </div>
+                                    <label class="form-label">Days Worked Entries</label>
+                                    <div id="days-worked-entries-container">
+                                        <div class="days-worked-entry mb-2">
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <input type="number" step="0.01" class="form-control days-worked-count" placeholder="Days" value="0">
+                                                </div>
+                                                <div class="col-md-7">
+                                                    <select class="form-select days-worked-type">
+                                                        <option value="regular_day">Regular Day</option>
+                                                        <option value="rest_day">Rest Day</option>
+                                                        <option value="rest_day_special_holiday">Rest Day and Special Holiday</option>
+                                                        <option value="regular_holiday_ordinary_day">Regular Holiday - Ordinary Day</option>
+                                                        <option value="rest_day_regular_holiday">Rest Day and Regular Holiday</option>
+                                                        <option value="special_holiday_ordinary_day">Special Holiday- Ordinary Day</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-1 d-flex align-items-center">
+                                                    <button type="button" class="btn btn-sm btn-danger remove-days-worked" style="display:none;"><i class="fas fa-times"></i></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-primary add-days-worked" id="add-daysworked-btn">
+                                            <i class="fas fa-plus me-1"></i>Add Days Worked
+                                        </button>
+                                    </div>
+                                    <div class="mt-2">
+                                        <table class="table table-sm table-bordered" id="days-worked-summary-table" style="display:none;">
+                                            <thead>
+                                                <tr>
+                                                    <th>Days</th>
+                                                    <th>Type</th>
+                                                    <th>Amount</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="days-worked-summary-body">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <!-- Hidden fields to store overtime data for form submission -->
+                                    <input type="hidden" id="days_worked_entries_json" name="days_worked_entries_json" value="[]">
+                                </div> 
                                 <div class="mb-3">
                                     <label for="late_minutes" class="form-label">Late (Minutes)</label>
                                     <input type="number" step="0.01" class="form-control" id="late_minutes" name="late_minutes" value="0" onchange="calculatePayroll()">
@@ -894,13 +952,13 @@ $payroll_records = $conn->query("
                                                 <div class="col-md-7">
                                                     <select class="form-select overtime-type">
                                                         <option value="0">No Overtime</option>
-                                                        <option value="100.78">Ordinary Day OT (₱100.78)</option>
-                                                        <option value="136.26">Rest Day/Special Holiday OT (₱136.26)</option>
-                                                        <option value="157.22">Rest Day and Special Holiday OT (₱157.22)</option>
-                                                        <option value="209.63">Regular Holiday - Ordinary Day OT (₱209.63)</option>
-                                                        <option value="272.51">Rest Day and Regular Holiday OT (₱272.51)</option>
-                                                        <option value="8.06">Night Differential - Ordinary Day (₱8.06)</option>
-                                                        <option value="115.29">Night Differential - Rest Day (₱115.29)</option>
+                                                        <option value="ordinary_day_ot">Ordinary Day OT</option>
+                                                        <option value="rest_day_special_holiday_ot">Rest Day/Special Holiday OT</option>
+                                                        <option value="rest_day_and_special_holiday_ot">Rest Day and Special Holiday OT</option>
+                                                        <option value="regular_holiday_ordinary_day_ot">Regular Holiday - Ordinary Day OT</option>
+                                                        <option value="rest_day_regular_holiday_ot_special">Rest Day and Regular Holiday OT</option>
+                                                        <option value="night_differential_ordinary_day">Night Differential - Ordinary Day</option>
+                                                        <option value="night_differential_rest_day">Night Differential - Rest Day</option>
                                                     </select>
                                                 </div>
                                                 <div class="col-md-1 d-flex align-items-center">
@@ -1331,12 +1389,18 @@ $payroll_records = $conn->query("
                 addOvertimeEntry();
             });
             
+            // Add days worked entry button
+            document.querySelector('.add-days-worked').addEventListener('click', function() {
+                addDaysWorkedEntry();
+            });
+            
             // Add direct event listeners to key input fields
             const daysWorkedInput = document.getElementById('days_worked');
             if (daysWorkedInput) {
                 daysWorkedInput.addEventListener('input', function() {
                     console.log('Days worked changed to:', this.value);
                     calculatePayroll();
+                    updateDaysWorkedSummary();
                 });
             }
             
@@ -1353,6 +1417,13 @@ $payroll_records = $conn->query("
             
             // Add event listeners to the first overtime entry
             setupOvertimeEntryListeners(document.querySelector('.overtime-entry'));
+            
+            // Add event listeners to the first days worked entry
+            setupDaysWorkedEntryListeners(document.querySelector('.days-worked-entry'));
+            
+            // Initialize summaries
+            updateOvertimeSummary();
+            updateDaysWorkedSummary();
         });
         
         function setupOvertimeEntryListeners(entryElement) {
@@ -1392,13 +1463,13 @@ $payroll_records = $conn->query("
                     <div class="col-md-7">
                         <select class="form-select overtime-type">
                             <option value="0">No Overtime</option>
-                            <option value="100.78">Ordinary Day OT (₱100.78)</option>
-                            <option value="136.26">Rest Day/Special Holiday OT (₱136.26)</option>
-                            <option value="157.22">Rest Day and Special Holiday OT (₱157.22)</option>
-                            <option value="209.63">Regular Holiday - Ordinary Day OT (₱209.63)</option>
-                            <option value="272.51">Rest Day and Regular Holiday OT (₱272.51)</option>
-                            <option value="8.06">Night Differential - Ordinary Day (₱8.06)</option>
-                            <option value="115.29">Night Differential - Rest Day (₱115.29)</option>
+                            <option value="ordinary_day_ot">Ordinary Day OT</option>
+                            <option value="rest_day_special_holiday_ot">Rest Day/Special Holiday OT</option>
+                            <option value="rest_day_and_special_holiday_ot">Rest Day and Special Holiday OT</option>
+                            <option value="regular_holiday_ordinary_day_ot">Regular Holiday - Ordinary Day OT</option>
+                            <option value="rest_day_regular_holiday_ot_special">Rest Day and Regular Holiday OT</option>
+                            <option value="night_differential_ordinary_day">Night Differential - Ordinary Day</option>
+                            <option value="night_differential_rest_day">Night Differential - Rest Day</option>
                         </select>
                     </div>
                     <div class="col-md-1 d-flex align-items-center">
@@ -1434,6 +1505,21 @@ $payroll_records = $conn->query("
                     button.style.display = 'none';
                 });
             }
+            
+            // Do the same for days worked entries
+            const daysEntries = document.querySelectorAll('.days-worked-entry');
+            const daysRemoveButtons = document.querySelectorAll('.remove-days-worked');
+            
+            // Show remove buttons only if there's more than one entry
+            if (daysEntries.length > 1) {
+                daysRemoveButtons.forEach(button => {
+                    button.style.display = 'block';
+                });
+            } else {
+                daysRemoveButtons.forEach(button => {
+                    button.style.display = 'none';
+                });
+            }
         }
         
         function updateOvertimeSummary() {
@@ -1441,6 +1527,7 @@ $payroll_records = $conn->query("
             const summaryTable = document.getElementById('overtime-summary-table');
             const summaryBody = document.getElementById('overtime-summary-body');
             const overtimeEntriesJson = document.getElementById('overtime_entries_json');
+            const dailyRate = parseFloat(document.getElementById('employee_id').options[document.getElementById('employee_id').selectedIndex].getAttribute('data-rate')) || 0;
             
             // Clear the summary table
             summaryBody.innerHTML = '';
@@ -1453,9 +1540,42 @@ $payroll_records = $conn->query("
             
             entries.forEach((entry, index) => {
                 const hours = parseFloat(entry.querySelector('.overtime-hours').value) || 0;
-                const rateValue = entry.querySelector('.overtime-type').value;
-                const rate = parseFloat(rateValue) || 0;
+                const overtimeType = entry.querySelector('.overtime-type').value;
                 const typeText = entry.querySelector('.overtime-type option:checked').text;
+                
+                // Calculate rate based on daily rate and overtime type
+                let rate = 0;
+                if (overtimeType !== '0') {
+                    switch(overtimeType) {
+                        case 'ordinary_day_ot':
+                            rate = [(dailyRate / 8) * 1.25];
+                            break;
+                        case 'rest_day_special_holiday_ot':
+                            rate = [(dailyRate / 8) * 1.69];
+                            break;
+                        case 'rest_day_and_special_holiday_ot':
+                            rate = [(dailyRate / 8) * 1.95];
+                            break;
+                        case 'regular_holiday_ordinary_day_ot':
+                            rate = [(dailyRate / 8) * 2.6];
+                            break;
+                        case 'rest_day_regular_holiday_ot':
+                            rate = [(dailyRate / 8) * 1.3];
+                            break;
+                        case 'rest_day_regular_holiday_ot_special':
+                            rate = (((dailyRate / 8) * 2.6) * 1.3);
+                            break;
+                        case 'night_differential_ordinary_day':
+                            rate = [(dailyRate / 8) * 0.1];
+                            break;
+                        case 'night_differential_rest_day':
+                            rate = [(dailyRate / 8) * 1.3] * 1.1;
+                            break;
+                        default:
+                            // For backward compatibility with numeric values
+                            rate = parseFloat(overtimeType) || 0;
+                    }
+                }
                 
                 // Skip entries with 0 hours or 0 rate
                 if (hours === 0 || rate === 0) return;
@@ -1482,6 +1602,7 @@ $payroll_records = $conn->query("
                     hours: hours,
                     rate: rate,
                     type: typeText,
+                    overtime_type: overtimeType,
                     amount: amount
                 });
             });
@@ -1503,7 +1624,192 @@ $payroll_records = $conn->query("
             }
         }
         
+        function setupDaysWorkedEntryListeners(entryElement) {
+            const daysInput = entryElement.querySelector('.days-worked-count');
+            const typeSelect = entryElement.querySelector('.days-worked-type');
+            const removeButton = entryElement.querySelector('.remove-days-worked');
+            
+            if (daysInput) {
+                daysInput.addEventListener('change', function() {
+                    calculatePayroll();
+                    updateDaysWorkedSummary();
+                });
+            }
+            
+            if (typeSelect) {
+                typeSelect.addEventListener('change', function() {
+                    calculatePayroll();
+                    updateDaysWorkedSummary();
+                });
+            }
+            
+            if (removeButton) {
+                removeButton.addEventListener('click', function() {
+                    entryElement.remove();
+                    calculatePayroll();
+                    updateDaysWorkedSummary();
+                    toggleRemoveButtons();
+                });
+            }
+        }
+        
+        function addDaysWorkedEntry() {
+            const container = document.getElementById('days-worked-entries-container');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'days-worked-entry mb-2';
+            newEntry.innerHTML = `
+                <div class="row">
+                    <div class="col-md-4">
+                        <input type="number" step="0.01" class="form-control days-worked-count" placeholder="Days" value="0">
+                    </div>
+                    <div class="col-md-7">
+                        <select class="form-select days-worked-type">
+                            <option value="regular_day">Regular Day</option>
+                            <option value="rest_day">Rest Day</option>
+                            <option value="rest_day_special_holiday">Rest Day and Special Holiday</option>
+                            <option value="regular_holiday_ordinary_day">Regular Holiday - Ordinary Day</option>
+                            <option value="rest_day_regular_holiday">Rest Day and Regular Holiday</option>
+                            <option value="special_holiday_ordinary_day">Special Holiday- Ordinary Day</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-center">
+                        <button type="button" class="btn btn-sm btn-danger remove-days-worked"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(newEntry);
+            
+            // Add event listeners to the new entry
+            setupDaysWorkedEntryListeners(newEntry);
+            
+            // Show/hide remove buttons based on number of entries
+            toggleRemoveButtons();
+            
+            // Update calculations
+            calculatePayroll();
+            updateDaysWorkedSummary();
+        }
+        
+        function updateDaysWorkedSummary() {
+            const entries = document.querySelectorAll('.days-worked-entry');
+            const summaryTable = document.getElementById('days-worked-summary-table');
+            const summaryBody = document.getElementById('days-worked-summary-body');
+            const daysWorkedEntriesJson = document.getElementById('days_worked_entries_json');
+            
+            // Check if essential elements exist
+            if (!summaryTable || !summaryBody || !daysWorkedEntriesJson) {
+                console.warn('Essential elements for days worked summary not found');
+                return;
+            }
+            
+            // Safely get daily rate
+            const employeeSelect = document.getElementById('employee_id');
+            let dailyRate = 0;
+            if (employeeSelect && employeeSelect.selectedIndex >= 0 && employeeSelect.options[employeeSelect.selectedIndex]) {
+                dailyRate = parseFloat(employeeSelect.options[employeeSelect.selectedIndex].getAttribute('data-rate')) || 0;
+            }
+            
+            // Clear the summary table
+            summaryBody.innerHTML = '';
+            
+            // Prepare the JSON data
+            const daysWorkedData = [];
+            
+            // Check if there are any valid days worked entries
+            let hasValidEntries = false;
+            let totalDaysWorked = 0;
+            
+            entries.forEach((entry, index) => {
+                const days = parseFloat(entry.querySelector('.days-worked-count').value) || 0;
+                const dayType = entry.querySelector('.days-worked-type').value;
+                const typeText = entry.querySelector('.days-worked-type option:checked').text;
+                
+                // Calculate rate based on daily rate and day type
+                let rate = dailyRate;
+                if (dayType !== 'regular_day') {
+                    switch(dayType) {
+                        case 'rest_day':
+                            rate = dailyRate * 1.3;
+                            break;
+                        case 'rest_day_special_holiday':
+                            rate = dailyRate * 1.5;
+                            break;
+                        case 'regular_holiday_ordinary_day':
+                            rate = dailyRate * 1;
+                            break;
+                        case 'rest_day_regular_holiday':
+                            rate = (dailyRate * 2) + (dailyRate * 0.3 * 2);
+                            break;
+                        case 'special_holiday_ordinary_day':
+                            rate = dailyRate * 0.3;
+                            break;
+                        default:
+                            rate = dailyRate;
+                    }
+                }
+                
+                // Skip entries with 0 days
+                if (days === 0) return;
+                
+                hasValidEntries = true;
+                totalDaysWorked += days;
+                const amount = days * rate;
+                
+                // Add to the summary table
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${days}</td>
+                    <td>${typeText}</td>
+                    <td>₱${amount.toFixed(2)}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeDaysWorkedEntry(${index})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                summaryBody.appendChild(row);
+                
+                // Add to the JSON data
+                daysWorkedData.push({
+                    days: days,
+                    rate: rate,
+                    type: typeText,
+                    day_type: dayType,
+                    amount: amount
+                });
+            });
+            
+            // Update the main days_worked field with total
+            const daysWorkedField = document.getElementById('days_worked');
+            if (daysWorkedField) {
+                daysWorkedField.value = totalDaysWorked;
+            }
+            
+            // Show/hide the summary table
+            summaryTable.style.display = hasValidEntries ? 'table' : 'none';
+            
+            // Update the hidden JSON field
+            daysWorkedEntriesJson.value = JSON.stringify(daysWorkedData);
+        }
+        
+        function removeDaysWorkedEntry(index) {
+            const entries = document.querySelectorAll('.days-worked-entry');
+            if (index < entries.length) {
+                entries[index].remove();
+                toggleRemoveButtons();
+                calculatePayroll();
+                updateDaysWorkedSummary();
+            }
+        }
+        
         function calculatePayroll() {
+            // Helper function to safely get element value
+            function getElementValue(id) {
+                const element = document.getElementById(id);
+                return element ? parseFloat(element.value || 0) : 0;
+            }
+            
             // Get the employee select element
             const employeeSelect = document.getElementById('employee_id');
             
@@ -1520,28 +1826,57 @@ $payroll_records = $conn->query("
             }
             
             const dailyRate = parseFloat(selectedOption.getAttribute('data-rate')) || 0;
-            const daysWorked = parseFloat(document.getElementById('days_worked').value) || 0;
-            const lateMinutes = parseFloat(document.getElementById('late_minutes').value) || 0;
-            const allowances = parseFloat(document.getElementById('allowances').value) || 0;
-            const additionalPayment = parseFloat(document.getElementById('additional_payment').value) || 0;
-            const otherDeductions = parseFloat(document.getElementById('other_deductions').value) || 0;
-            const loansAdvances = parseFloat(document.getElementById('loans_advances').value) || 0;
-            const sssLoan = parseFloat(document.getElementById('sss_loan').value) || 0;
-            const hdmfLoan = parseFloat(document.getElementById('hdmf_loan').value) || 0;
+            const daysWorked = getElementValue('days_worked');
+            const lateMinutes = getElementValue('late_minutes');
+            const allowances = getElementValue('allowances');
+            const additionalPayment = getElementValue('additional_payment');
+            const otherDeductions = getElementValue('other_deductions');
+            const loansAdvances = getElementValue('loans_advances');
+            const sssLoan = getElementValue('sss_loan');
+            const hdmfLoan = getElementValue('hdmf_loan');
             
             console.log('Daily Rate:', dailyRate, 'Days Worked:', daysWorked);
             
             // Calculate late deduction: (late time / 8) / 60 * daily rate
             const lateDeduction = (lateMinutes / 8) / 60 * dailyRate;
             
-            // Calculate basic pay with proper rounding to avoid decimal issues
-            // For monthly rate of 5000 and 22 days worked, ensure it's exactly 5000
-            let basicPay;
-            if (dailyRate === 227.27 && daysWorked === 22) {
-                basicPay = 5000 + additionalPayment;
-            } else {
-                basicPay = parseFloat((dailyRate * daysWorked).toFixed(2)) + additionalPayment;
-            }
+            // Calculate basic pay from days worked entries
+            let basicPay = 0;
+            const daysWorkedEntries = document.querySelectorAll('.days-worked-entry');
+            
+            daysWorkedEntries.forEach(entry => {
+                const days = parseFloat(entry.querySelector('.days-worked-count').value) || 0;
+                const dayType = entry.querySelector('.days-worked-type').value;
+                
+                // Calculate rate based on daily rate and day type
+                let rate = dailyRate;
+                if (dayType !== 'regular_day') {
+                    switch(dayType) {
+                        case 'rest_day':
+                            rate = dailyRate * 1.3;
+                            break;
+                        case 'rest_day_special_holiday':
+                            rate = dailyRate * 1.5;
+                            break;
+                        case 'regular_holiday_ordinary_day':
+                            rate = dailyRate * 1;
+                            break;
+                        case 'rest_day_regular_holiday':
+                            rate = (dailyRate * 2) + (dailyRate * 0.3 * 2);
+                            break;
+                        case 'special_holiday_ordinary_day':
+                            rate = dailyRate * 0.3;
+                            break;
+                        default:
+                            rate = dailyRate;
+                    }
+                }
+                
+                basicPay += days * rate;
+            });
+            
+            // Add additional payment
+            basicPay = parseFloat(basicPay.toFixed(2)) + additionalPayment;
             
             // Calculate total overtime pay from all entries
             let overtimePay = 0;
@@ -1549,7 +1884,41 @@ $payroll_records = $conn->query("
             
             overtimeEntries.forEach(entry => {
                 const hours = parseFloat(entry.querySelector('.overtime-hours').value) || 0;
-                const rate = parseFloat(entry.querySelector('.overtime-type').value) || 0;
+                const overtimeType = entry.querySelector('.overtime-type').value;
+                let rate = 0;
+                
+                // Calculate rate based on daily rate and overtime type
+                if (overtimeType !== '0') {
+                    switch(overtimeType) {
+                        case 'ordinary_day_ot':
+                            rate = [(dailyRate / 8) * 1.25];
+                            break;
+                        case 'rest_day_special_holiday_ot':
+                            rate = [(dailyRate / 8) * 1.69];
+                            break;
+                        case 'rest_day_and_special_holiday_ot':
+                            rate = [(dailyRate / 8) * 1.95];
+                            break;
+                        case 'regular_holiday_ordinary_day_ot':
+                            rate = [(dailyRate / 8) * 2.6];
+                            break;
+                        case 'rest_day_regular_holiday_ot':
+                            rate = [(dailyRate / 8) * 1.3];
+                            break;
+                        case 'rest_day_regular_holiday_ot_special':
+                            rate = (((dailyRate / 8) * 2.6) * 1.3);
+                            break;
+                        case 'night_differential_ordinary_day':
+                            rate = [(dailyRate / 8) * 0.1];
+                            break;
+                        case 'night_differential_rest_day':
+                            rate = [(dailyRate / 8) * 1.3] * 1.1;
+                            break;
+                        default:
+                            rate = 0;
+                    }
+                }
+                
                 overtimePay += hours * rate;
             });
             
@@ -1557,7 +1926,8 @@ $payroll_records = $conn->query("
             updateOvertimeSummary();
             
             // Check if deductions should be applied
-            const applyDeductions = document.getElementById('apply_deductions').checked;
+            const applyDeductionsElement = document.getElementById('apply_deductions');
+            const applyDeductions = applyDeductionsElement ? applyDeductionsElement.checked : false;
             
             let sssDeduction = 0;
             let philhealthDeduction = 0;
@@ -1565,14 +1935,49 @@ $payroll_records = $conn->query("
             let taxDeduction = 0;
             
             if (applyDeductions) {
-                // Calculate monthly basic pay for automatic deductions
-                let monthlyBasicPay = parseFloat((dailyRate * daysWorked).toFixed(2));
+                // Calculate monthly basic pay for automatic deductions from days worked entries
+                let monthlyBasicPay = 0;
+                const daysWorkedEntriesForDeductions = document.querySelectorAll('.days-worked-entry');
+                
+                daysWorkedEntriesForDeductions.forEach(entry => {
+                    const days = parseFloat(entry.querySelector('.days-worked-count').value) || 0;
+                    const dayType = entry.querySelector('.days-worked-type').value;
+                    
+                    // Calculate rate based on daily rate and day type
+                    let rate = dailyRate;
+                    if (dayType !== 'regular_day') {
+                        switch(dayType) {
+                            case 'rest_day':
+                                rate = dailyRate * 1.3;
+                                break;
+                            case 'rest_day_special_holiday':
+                                rate = dailyRate * 1.5;
+                                break;
+                            case 'regular_holiday_ordinary_day':
+                                rate = dailyRate * 1;
+                                break;
+                            case 'rest_day_regular_holiday':
+                                rate = (dailyRate * 2) + (dailyRate * 0.3 * 2);
+                                break;
+                            case 'special_holiday_ordinary_day':
+                                rate = dailyRate * 0.3;
+                                break;
+                            default:
+                                rate = dailyRate;
+                        }
+                    }
+                    
+                    monthlyBasicPay += days * rate;
+                });
+                
+                monthlyBasicPay = parseFloat(monthlyBasicPay.toFixed(2));
                 
                 // Initialize deduction values - we'll calculate them either here or in the AJAX callback
                 let deductionsCalculated = false;
                 
                 // Check if this is a month-end period (30th, 28th, 29th, 31st) and try to find previous mid-month payroll
-                const payPeriodId = document.getElementById('pay_period_id').value;
+                const payPeriodElement = document.getElementById('pay_period_id');
+                const payPeriodId = payPeriodElement ? payPeriodElement.value : '';
                 if (payPeriodId) {
                     // Get the period name from the dropdown
                     const periodSelect = document.getElementById('pay_period_id');
@@ -1591,7 +1996,8 @@ $payroll_records = $conn->query("
                         const midMonthPeriod = month + ' 15th';
                         
                         // Make an AJAX call to get the mid-month basic pay
-                        const employeeId = document.getElementById('employee_id').value;
+                        const employeeIdElement = document.getElementById('employee_id');
+                        const employeeId = employeeIdElement ? employeeIdElement.value : '';
                         
                         // Only proceed if we have an employee selected
                         if (employeeId) {

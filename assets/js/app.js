@@ -146,21 +146,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Payroll calculation function
 function calculatePayroll() {
-    var dailyRate = parseFloat(document.getElementById('daily_rate')?.value || 0);
-    var daysWorked = parseFloat(document.getElementById('days_worked')?.value || 0);
-    var lateMinutes = parseFloat(document.getElementById('late_minutes')?.value || 0);
-    var overtimeHours = parseFloat(document.getElementById('overtime_hours')?.value || 0);
-    var overtimeRate = parseFloat(document.getElementById('overtime_rate')?.value || 0);
-    var allowances = parseFloat(document.getElementById('allowances')?.value || 0);
-    var additionalPayment = parseFloat(document.getElementById('additional_payment')?.value || 0);
-    var sssDeduction = parseFloat(document.getElementById('sss_deduction')?.value || 0);
-    var philhealthDeduction = parseFloat(document.getElementById('philhealth_deduction')?.value || 0);
-    var pagibigDeduction = parseFloat(document.getElementById('pagibig_deduction')?.value || 0);
-    var taxDeduction = parseFloat(document.getElementById('tax_deduction')?.value || 0);
-    var otherDeductions = parseFloat(document.getElementById('other_deductions')?.value || 0);
-    var loansAdvances = parseFloat(document.getElementById('loans_advances')?.value || 0);
-    var sssLoan = parseFloat(document.getElementById('sss_loan')?.value || 0);
-    var hdmfLoan = parseFloat(document.getElementById('hdmf_loan')?.value || 0);
+    // Check if essential elements exist before proceeding
+    if (!document.getElementById('daily_rate')) {
+        console.warn('Essential payroll elements not found. Skipping calculation.');
+        return;
+    }
+    
+    // Helper function to safely get element value
+    function getElementValue(id) {
+        var element = document.getElementById(id);
+        return element ? parseFloat(element.value || 0) : 0;
+    }
+    
+    var dailyRate = getElementValue('daily_rate');
+    var daysWorked = getElementValue('days_worked');
+    var lateMinutes = getElementValue('late_minutes');
+    var overtimeHours = getElementValue('overtime_hours');
+    var overtimeRate = getElementValue('overtime_rate');
+    var allowances = getElementValue('allowances');
+    var additionalPayment = getElementValue('additional_payment');
+    var sssDeduction = getElementValue('sss_deduction');
+    var philhealthDeduction = getElementValue('philhealth_deduction');
+    var pagibigDeduction = getElementValue('pagibig_deduction');
+    var taxDeduction = getElementValue('tax_deduction');
+    var otherDeductions = getElementValue('other_deductions');
+    var loansAdvances = getElementValue('loans_advances');
+    var sssLoan = getElementValue('sss_loan');
+    var hdmfLoan = getElementValue('hdmf_loan');
 
     // Calculate late deduction: (late time / 8) / 60 * daily rate
     var lateDeduction = (lateMinutes / 8) / 60 * dailyRate;
@@ -189,6 +201,8 @@ function updateResultField(fieldId, value) {
     var field = document.getElementById(fieldId);
     if (field) {
         field.textContent = value.toFixed(2);
+    } else {
+        console.warn('Element with ID "' + fieldId + '" not found');
     }
 }
 

@@ -63,7 +63,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </ul>
             <ul class="navbar-nav">
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <?php if (isset($user['login_type']) && $user['login_type'] === 'google' && isset($user['google_picture'])): ?>
                             <img src="<?php echo htmlspecialchars($user['google_picture']); ?>" alt="Profile" width="30" height="30" class="rounded-circle me-1">
                         <?php else: ?>
@@ -71,7 +71,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                         <?php endif; ?>
                         <span class="username-text"><?php echo htmlspecialchars($user['name']); ?></span>
                     </a>
-                    <ul class="dropdown-menu">
+                    <ul class="dropdown-menu dropdown-menu-end" style="display: none;">
                         <li><a class="dropdown-item" href="logout.php">
                             <i class="fas fa-sign-out-alt me-2"></i>Logout
                         </a></li>

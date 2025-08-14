@@ -1,42 +1,86 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize all Bootstrap dropdowns
-    var dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
-    var dropdownList = dropdownElementList.map(function(dropdownToggleEl) {
-        return new bootstrap.Dropdown(dropdownToggleEl);
+    // Force hide all dropdown menus with multiple methods
+    const dropdownMenus = document.querySelectorAll('.dropdown-menu');
+    dropdownMenus.forEach(menu => {
+        menu.style.display = 'none !important';
+        menu.style.visibility = 'hidden';
+        menu.style.opacity = '0';
+        menu.classList.remove('show');
+        menu.setAttribute('data-bs-popper', 'none');
     });
     
-    // Add click event listener to all dropdown toggles to ensure they work on all pages
-    document.querySelectorAll('.dropdown-toggle').forEach(function(dropdownToggle) {
-        dropdownToggle.addEventListener('click', function(e) {
+    // Initialize custom dropdown functionality
+    const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+    dropdownToggles.forEach(toggle => {
+        // Set initial state
+        toggle.setAttribute('aria-expanded', 'false');
+        
+        toggle.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             
-            // Get the dropdown menu
-            var dropdownMenu = this.nextElementSibling;
-            
-            // Toggle the dropdown menu
-            if (dropdownMenu.classList.contains('show')) {
-                dropdownMenu.classList.remove('show');
-            } else {
+            const menu = this.nextElementSibling;
+            if (menu && menu.classList.contains('dropdown-menu')) {
+                const isVisible = menu.style.display === 'block' && menu.style.visibility === 'visible';
+                
                 // Close all other dropdowns first
-                document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
-                    menu.classList.remove('show');
+                dropdownMenus.forEach(otherMenu => {
+                    if (otherMenu !== menu) {
+                        otherMenu.style.display = 'none !important';
+                        otherMenu.style.visibility = 'hidden';
+                        otherMenu.style.opacity = '0';
+                        otherMenu.classList.remove('show');
+                    }
                 });
                 
-                // Show this dropdown
-                dropdownMenu.classList.add('show');
+                dropdownToggles.forEach(otherToggle => {
+                    if (otherToggle !== this) {
+                        otherToggle.setAttribute('aria-expanded', 'false');
+                    }
+                });
+                
+                // Toggle current dropdown
+                if (isVisible) {
+                    // Hide dropdown
+                    menu.style.display = 'none !important';
+                    menu.style.visibility = 'hidden';
+                    menu.style.opacity = '0';
+                    menu.classList.remove('show');
+                    this.setAttribute('aria-expanded', 'false');
+                } else {
+                    // Show dropdown
+                    menu.style.display = 'block !important';
+                    menu.style.visibility = 'visible';
+                    menu.style.opacity = '1';
+                    menu.classList.add('show');
+                    this.setAttribute('aria-expanded', 'true');
+                }
             }
         });
     });
     
-    // Close dropdowns when clicking outside
+    // Close dropdown when clicking outside
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.dropdown')) {
-            document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
+            dropdownMenus.forEach(menu => {
+                menu.style.display = 'none !important';
+                menu.style.visibility = 'hidden';
+                menu.style.opacity = '0';
                 menu.classList.remove('show');
+            });
+            dropdownToggles.forEach(toggle => {
+                toggle.setAttribute('aria-expanded', 'false');
             });
         }
     });
     
-    console.log('Bootstrap dropdowns initialized with enhanced functionality');
+    // Ensure dropdown links work properly
+    document.querySelectorAll('.dropdown-menu a').forEach(link => {
+        link.addEventListener('click', function(e) {
+            // Allow normal link behavior (don't prevent default)
+            console.log('Dropdown link clicked:', this.href);
+        });
+    });
+    
+    console.log('Custom dropdown functionality initialized');
 });

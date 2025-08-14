@@ -1316,3 +1316,12 @@ a:hover {
 .page-title i {
     color: var(--primary-color);
 }
+
+/* Fix dropdown menu visibility */
+.dropdown-menu {
+    display: none !important;
+}
+
+.dropdown-menu.show {
+    display: block !important;
+}

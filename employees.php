@@ -44,29 +44,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($check_stmt->get_result()->num_rows > 0) {
                     $error = 'Employee number already exists.';
                 } else {
-                    $stmt = $conn->prepare("INSERT INTO employees (employee_number, first_name, last_name, email, phone, position, department, status, rate_type, daily_rate, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->bind_param("sssssssssds", $employee_number, $first_name, $last_name, $email, $phone, $position, $department, $status, $rate_type, $daily_rate, $hire_date);
-                    
-                    if ($stmt->execute()) {
-                        $employee_id = $conn->insert_id;
-                        
-                        // Check if there's a Google user with this email and link them
-                        $check_google_user = $conn->prepare("SELECT id FROM users WHERE google_email = ? AND employee_id IS NULL");
-                        $check_google_user->bind_param("s", $email);
-                        $check_google_user->execute();
-                        $google_result = $check_google_user->get_result();
-                        
-                        if ($google_result->num_rows > 0) {
-                            $google_user = $google_result->fetch_assoc();
-                            // Link the Google user to this employee
-                            $update_user = $conn->prepare("UPDATE users SET employee_id = ?, role = 'employee' WHERE id = ?");
-                            $update_user->bind_param("ii", $employee_id, $google_user['id']);
-                            $update_user->execute();
-                        }
-                        
-                        $message = 'Employee added successfully.';
+                    // Check if email already exists
+                    $check_email_stmt = $conn->prepare("SELECT id FROM employees WHERE email = ?");
+                    $check_email_stmt->bind_param("s", $email);
+                    $check_email_stmt->execute();
+                    if ($check_email_stmt->get_result()->num_rows > 0) {
+                        $error = 'Email address already exists. Please use a different email address.';
                     } else {
-                        $error = 'Error adding employee: ' . $stmt->error;
+                        $stmt = $conn->prepare("INSERT INTO employees (employee_number, first_name, last_name, email, phone, position, department, status, rate_type, daily_rate, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $stmt->bind_param("sssssssssds", $employee_number, $first_name, $last_name, $email, $phone, $position, $department, $status, $rate_type, $daily_rate, $hire_date);
+                        
+                        try {
+                            if ($stmt->execute()) {
+                                $employee_id = $conn->insert_id;
+                                
+                                // Check if there's a Google user with this email and link them
+                                $check_google_user = $conn->prepare("SELECT id FROM users WHERE google_email = ? AND employee_id IS NULL");
+                                $check_google_user->bind_param("s", $email);
+                                $check_google_user->execute();
+                                $google_result = $check_google_user->get_result();
+                                
+                                if ($google_result->num_rows > 0) {
+                                    $google_user = $google_result->fetch_assoc();
+                                    // Link the Google user to this employee
+                                    $update_user = $conn->prepare("UPDATE users SET employee_id = ?, role = 'employee' WHERE id = ?");
+                                    $update_user->bind_param("ii", $employee_id, $google_user['id']);
+                                    $update_user->execute();
+                                }
+                                
+                                $message = 'Employee added successfully.';
+                            } else {
+                                $error = 'Error adding employee: ' . $stmt->error;
+                            }
+                        } catch (mysqli_sql_exception $e) {
+                            if ($e->getCode() == 1062) { // Duplicate entry error code
+                                if (strpos($e->getMessage(), 'email') !== false) {
+                                    $error = 'Email address already exists. Please use a different email address.';
+                                } else {
+                                    $error = 'Employee number already exists. Please use a different employee number.';
+                                }
+                            } else {
+                                $error = 'Error adding employee: ' . $e->getMessage();
+                            }
+                        }
                     }
                 }
                 break;
@@ -88,13 +108,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $daily_rate = $daily_rate / 22;
                 }
                 
-                $stmt = $conn->prepare("UPDATE employees SET first_name = ?, last_name = ?, email = ?, phone = ?, position = ?, department = ?, status = ?, rate_type = ?, daily_rate = ? WHERE id = ?");
-                $stmt->bind_param("ssssssssdi", $first_name, $last_name, $email, $phone, $position, $department, $status, $rate_type, $daily_rate, $id);
-                
-                if ($stmt->execute()) {
-                    $message = 'Employee updated successfully.';
+                // Check if email already exists for a different employee
+                $check_email_stmt = $conn->prepare("SELECT id FROM employees WHERE email = ? AND id != ?");
+                $check_email_stmt->bind_param("si", $email, $id);
+                $check_email_stmt->execute();
+                if ($check_email_stmt->get_result()->num_rows > 0) {
+                    $error = 'Email address already exists. Please use a different email address.';
                 } else {
-                    $error = 'Error updating employee: ' . $stmt->error;
+                    $stmt = $conn->prepare("UPDATE employees SET first_name = ?, last_name = ?, email = ?, phone = ?, position = ?, department = ?, status = ?, rate_type = ?, daily_rate = ? WHERE id = ?");
+                    $stmt->bind_param("ssssssssdi", $first_name, $last_name, $email, $phone, $position, $department, $status, $rate_type, $daily_rate, $id);
+                    
+                    try {
+                        if ($stmt->execute()) {
+                            $message = 'Employee updated successfully.';
+                        } else {
+                            $error = 'Error updating employee: ' . $stmt->error;
+                        }
+                    } catch (mysqli_sql_exception $e) {
+                        if ($e->getCode() == 1062) { // Duplicate entry error code
+                            if (strpos($e->getMessage(), 'email') !== false) {
+                                $error = 'Email address already exists. Please use a different email address.';
+                            } else {
+                                $error = 'Employee number already exists. Please use a different employee number.';
+                            }
+                        } else {
+                            $error = 'Error updating employee: ' . $e->getMessage();
+                        }
+                    }
                 }
                 break;
                 
