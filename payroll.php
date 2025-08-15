@@ -266,6 +266,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $loans_advances = floatval($_POST['loans_advances'] ?? 0);
                 $sss_loan = floatval($_POST['sss_loan'] ?? 0);
                 $hdmf_loan = floatval($_POST['hdmf_loan'] ?? 0);
+                $calamity_loan = floatval($_POST['calamity_loan'] ?? 0);
+                $multipurpose_loan = floatval($_POST['multipurpose_loan'] ?? 0);
                 
                 // Calculate total overtime pay from entries
                 $overtime_pay = 0;
@@ -430,7 +432,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $tax_deduction = 0;
                 }
                 
-                $total_deductions = $sss_deduction + $philhealth_deduction + $pagibig_deduction + $tax_deduction + $other_deductions + $loans_advances + $sss_loan + $hdmf_loan + $late_deduction;
+                $total_deductions = $sss_deduction + $philhealth_deduction + $pagibig_deduction + $tax_deduction + $other_deductions + $loans_advances + $sss_loan + $hdmf_loan + $calamity_loan + $multipurpose_loan + $late_deduction;
                 $net_pay = $basic_pay + $overtime_pay + $allowances - $total_deductions;
                 $thirteenth_month_pay = $basic_pay / 12;
                 
@@ -440,12 +442,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     if ($is_update) {
                         // Update existing record
-                        $stmt = $conn->prepare("UPDATE payroll_records SET days_worked = ?, late_minutes = ?, basic_pay = ?, overtime_pay = ?, allowances = ?, additional_payment = ?, sss_deduction = ?, philhealth_deduction = ?, pagibig_deduction = ?, tax_deduction = ?, other_deductions = ?, loans_advances = ?, sss_loan = ?, hdmf_loan = ?, late_deduction = ?, total_deductions = ?, net_pay = ?, thirteenth_month_pay = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_id = ? AND pay_period_id = ?");
+                        $stmt = $conn->prepare("UPDATE payroll_records SET days_worked = ?, late_minutes = ?, basic_pay = ?, overtime_pay = ?, allowances = ?, additional_payment = ?, sss_deduction = ?, philhealth_deduction = ?, pagibig_deduction = ?, tax_deduction = ?, other_deductions = ?, loans_advances = ?, sss_loan = ?, hdmf_loan = ?, calamity_loan = ?, multipurpose_loan = ?, late_deduction = ?, total_deductions = ?, net_pay = ?, thirteenth_month_pay = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_id = ? AND pay_period_id = ?");
                         if ($stmt === false) {
                             throw new Exception('Database error: ' . $conn->error);
                         }
                         error_log("DEBUG: Updating payroll_records with overtime_pay: $overtime_pay");
-                        if (!$stmt->bind_param("ddddddddddddddddddii", $days_worked, $late_minutes, $basic_pay, $overtime_pay, $allowances, $additional_payment, $sss_deduction, $philhealth_deduction, $pagibig_deduction, $tax_deduction, $other_deductions, $loans_advances, $sss_loan, $hdmf_loan, $late_deduction, $total_deductions, $net_pay, $thirteenth_month_pay, $employee_id, $pay_period_id)) {
+                        if (!$stmt->bind_param("ddddddddddddddddddddii", $days_worked, $late_minutes, $basic_pay, $overtime_pay, $allowances, $additional_payment, $sss_deduction, $philhealth_deduction, $pagibig_deduction, $tax_deduction, $other_deductions, $loans_advances, $sss_loan, $hdmf_loan, $calamity_loan, $multipurpose_loan, $late_deduction, $total_deductions, $net_pay, $thirteenth_month_pay, $employee_id, $pay_period_id)) {
                             throw new Exception('Parameter binding error: ' . $stmt->error);
                         }
                         
@@ -458,11 +460,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $delete_overtime->execute();
                     } else {
                         // Insert new record
-                        $stmt = $conn->prepare("INSERT INTO payroll_records (employee_id, pay_period_id, days_worked, late_minutes, basic_pay, overtime_pay, allowances, additional_payment, sss_deduction, philhealth_deduction, pagibig_deduction, tax_deduction, other_deductions, loans_advances, sss_loan, hdmf_loan, late_deduction, total_deductions, net_pay, thirteenth_month_pay) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $stmt = $conn->prepare("INSERT INTO payroll_records (employee_id, pay_period_id, days_worked, late_minutes, basic_pay, overtime_pay, allowances, additional_payment, sss_deduction, philhealth_deduction, pagibig_deduction, tax_deduction, other_deductions, loans_advances, sss_loan, hdmf_loan, calamity_loan, multipurpose_loan, late_deduction, total_deductions, net_pay, thirteenth_month_pay) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                         if ($stmt === false) {
                             throw new Exception('Database error: ' . $conn->error);
                         }
-                        if (!$stmt->bind_param("iidddddddddddddddddd", $employee_id, $pay_period_id, $days_worked, $late_minutes, $basic_pay, $overtime_pay, $allowances, $additional_payment, $sss_deduction, $philhealth_deduction, $pagibig_deduction, $tax_deduction, $other_deductions, $loans_advances, $sss_loan, $hdmf_loan, $late_deduction, $total_deductions, $net_pay, $thirteenth_month_pay)) {
+                        if (!$stmt->bind_param("iidddddddddddddddddddd", $employee_id, $pay_period_id, $days_worked, $late_minutes, $basic_pay, $overtime_pay, $allowances, $additional_payment, $sss_deduction, $philhealth_deduction, $pagibig_deduction, $tax_deduction, $other_deductions, $loans_advances, $sss_loan, $hdmf_loan, $calamity_loan, $multipurpose_loan, $late_deduction, $total_deductions, $net_pay, $thirteenth_month_pay)) {
                             throw new Exception('Parameter binding error: ' . $stmt->error);
                         }
                     }
@@ -1091,8 +1093,16 @@ $payroll_records = $conn->query("
                                     <input type="number" step="0.01" class="form-control" id="sss_loan" name="sss_loan" value="0" onchange="calculatePayroll()">
                                 </div>
                                 <div class="mb-3">
-                                    <label for="hdmf_loan" class="form-label">HDMF Loan</label>
+                                    <label for="hdmf_loan" class="form-label">MPII Savings</label>
                                     <input type="number" step="0.01" class="form-control" id="hdmf_loan" name="hdmf_loan" value="0" onchange="calculatePayroll()">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="calamity_loan" class="form-label">Calamity Loan</label>
+                                    <input type="number" step="0.01" class="form-control" id="calamity_loan" name="calamity_loan" value="0" onchange="calculatePayroll()">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="multipurpose_loan" class="form-label">Multi-Purpose Loan</label>
+                                    <input type="number" step="0.01" class="form-control" id="multipurpose_loan" name="multipurpose_loan" value="0" onchange="calculatePayroll()">
                                 </div>
                             </div>
                         </div>
@@ -2123,6 +2133,8 @@ $payroll_records = $conn->query("
             const loansAdvances = getElementValue('loans_advances');
             const sssLoan = getElementValue('sss_loan');
             const hdmfLoan = getElementValue('hdmf_loan');
+            const calamityLoan = getElementValue('calamity_loan');
+            const multipurposeLoan = getElementValue('multipurpose_loan');
             
             console.log('Daily Rate:', dailyRate, 'Days Worked:', daysWorked);
             
@@ -2331,7 +2343,7 @@ $payroll_records = $conn->query("
                                         
                                         // Update total deductions and net pay
                                         const totalDeductions = sssDeduction + philhealthDeduction + pagibigDeduction + taxDeduction + 
-                                                               otherDeductions + loansAdvances + sssLoan + hdmfLoan + lateDeduction;
+                                                               otherDeductions + loansAdvances + sssLoan + hdmfLoan + calamityLoan + multipurposeLoan + lateDeduction;
                                         const netPay = basicPay + overtimePay + allowances - totalDeductions;
                                         
                                         document.getElementById('total_deductions_result').textContent = totalDeductions.toFixed(2);
@@ -2385,7 +2397,7 @@ $payroll_records = $conn->query("
             document.getElementById('pagibig_deduction').value = pagibigDeduction.toFixed(2);
             document.getElementById('tax_deduction').value = taxDeduction.toFixed(2);
             
-            const totalDeductions = sssDeduction + philhealthDeduction + pagibigDeduction + taxDeduction + otherDeductions + loansAdvances + sssLoan + hdmfLoan + lateDeduction;
+            const totalDeductions = sssDeduction + philhealthDeduction + pagibigDeduction + taxDeduction + otherDeductions + loansAdvances + sssLoan + hdmfLoan + calamityLoan + multipurposeLoan + lateDeduction;
             const netPay = basicPay + overtimePay + allowances - totalDeductions;
             const thirteenthMonthPay = basicPay / 12;
             
