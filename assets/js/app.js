@@ -168,10 +168,6 @@ function calculatePayroll() {
     var lateMinutes = getElementValue('late_minutes');
     var allowances = getElementValue('allowances');
     var additionalPayment = getElementValue('additional_payment');
-    var sssDeduction = getElementValue('sss_deduction');
-    var philhealthDeduction = getElementValue('philhealth_deduction');
-    var pagibigDeduction = getElementValue('pagibig_deduction');
-    var taxDeduction = getElementValue('tax_deduction');
     var otherDeductions = getElementValue('other_deductions');
     var loansAdvances = getElementValue('loans_advances');
     var sssLoan = getElementValue('sss_loan');
@@ -254,6 +250,34 @@ function calculatePayroll() {
         }
     });
     
+    // Check if automatic deductions should be applied
+    var applyDeductions = document.getElementById('apply_deductions') && document.getElementById('apply_deductions').checked;
+    
+    var sssDeduction, philhealthDeduction, pagibigDeduction, taxDeduction;
+    
+    if (applyDeductions) {
+        // Calculate monthly basic pay for automatic deductions (matches backend logic)
+        var monthlyBasicPay = basicPay;
+        
+        // Use automatic calculation functions (matching backend logic)
+        sssDeduction = calculateSSSDeductionJS(monthlyBasicPay);
+        philhealthDeduction = calculatePhilHealthDeductionJS(monthlyBasicPay);
+        pagibigDeduction = calculatePagIBIGDeductionJS();
+        taxDeduction = calculateTaxDeductionJS(monthlyBasicPay);
+        
+        // Update the form fields with calculated values
+        updateFormField('sss_deduction', sssDeduction);
+        updateFormField('philhealth_deduction', philhealthDeduction);
+        updateFormField('pagibig_deduction', pagibigDeduction);
+        updateFormField('tax_deduction', taxDeduction);
+    } else {
+        // Use manual input values when deductions are not automatically applied
+        sssDeduction = getElementValue('sss_deduction');
+        philhealthDeduction = getElementValue('philhealth_deduction');
+        pagibigDeduction = getElementValue('pagibig_deduction');
+        taxDeduction = getElementValue('tax_deduction');
+    }
+    
     // Calculate total deductions including all components (matches backend logic)
     var totalDeductions = sssDeduction + philhealthDeduction + pagibigDeduction + taxDeduction + otherDeductions + loansAdvances + sssLoan + hdmfLoan + lateDeduction;
     
@@ -285,6 +309,114 @@ function updateResultField(fieldId, value) {
     } else {
         console.warn('Element with ID "' + fieldId + '" not found');
     }
+}
+
+// Update form field with calculated value
+function updateFormField(fieldId, value) {
+    var field = document.getElementById(fieldId);
+    if (field) {
+        field.value = value.toFixed(2);
+    }
+}
+
+// JavaScript versions of backend calculation functions
+function calculateSSSDeductionJS(monthlyBasicPay) {
+    if (monthlyBasicPay < 5250) {
+        return 250;
+    } else if (monthlyBasicPay >= 5250 && monthlyBasicPay < 5750) {
+        return 275;
+    } else if (monthlyBasicPay >= 5750 && monthlyBasicPay < 6250) {
+        return 300;
+    } else if (monthlyBasicPay >= 6250 && monthlyBasicPay < 6750) {
+        return 325;
+    } else if (monthlyBasicPay >= 6750 && monthlyBasicPay < 7250) {
+        return 350;
+    } else if (monthlyBasicPay >= 7250 && monthlyBasicPay < 7750) {
+        return 375;
+    } else if (monthlyBasicPay >= 7750 && monthlyBasicPay < 8250) {
+        return 400;
+    } else if (monthlyBasicPay >= 8250 && monthlyBasicPay < 8750) {
+        return 425;
+    } else if (monthlyBasicPay >= 8750 && monthlyBasicPay < 9250) {
+        return 450;
+    } else if (monthlyBasicPay >= 9250 && monthlyBasicPay < 9750) {
+        return 475;
+    } else if (monthlyBasicPay >= 9750 && monthlyBasicPay < 10250) {
+        return 500;
+    } else if (monthlyBasicPay >= 10250 && monthlyBasicPay < 10750) {
+        return 525;
+    } else if (monthlyBasicPay >= 10750 && monthlyBasicPay < 11250) {
+        return 550;
+    } else if (monthlyBasicPay >= 11250 && monthlyBasicPay < 11750) {
+        return 575;
+    } else if (monthlyBasicPay >= 11750 && monthlyBasicPay < 12250) {
+        return 600;
+    } else if (monthlyBasicPay >= 12250 && monthlyBasicPay < 12750) {
+        return 625;
+    } else if (monthlyBasicPay >= 12750 && monthlyBasicPay < 13250) {
+        return 650;
+    } else if (monthlyBasicPay >= 13250 && monthlyBasicPay < 13750) {
+        return 675;
+    } else if (monthlyBasicPay >= 13750 && monthlyBasicPay < 14250) {
+        return 700;
+    } else if (monthlyBasicPay >= 14250 && monthlyBasicPay < 14750) {
+        return 725;
+    } else if (monthlyBasicPay >= 14750 && monthlyBasicPay < 15250) {
+        return 750;
+    } else if (monthlyBasicPay >= 15250 && monthlyBasicPay < 15750) {
+        return 775;
+    } else if (monthlyBasicPay >= 15750 && monthlyBasicPay < 16250) {
+        return 800;
+    } else if (monthlyBasicPay >= 16250 && monthlyBasicPay < 16750) {
+        return 825;
+    } else if (monthlyBasicPay >= 16750 && monthlyBasicPay < 17250) {
+        return 850;
+    } else if (monthlyBasicPay >= 17250 && monthlyBasicPay < 17750) {
+        return 875;
+    } else if (monthlyBasicPay >= 17750 && monthlyBasicPay < 18250) {
+        return 900;
+    } else if (monthlyBasicPay >= 18250 && monthlyBasicPay < 18750) {
+        return 925;
+    } else if (monthlyBasicPay >= 18750 && monthlyBasicPay < 19250) {
+        return 950;
+    } else if (monthlyBasicPay >= 19250 && monthlyBasicPay < 19750) {
+        return 975;
+    } else if (monthlyBasicPay >= 19750 && monthlyBasicPay < 20250) {
+        return 1000;
+    } else {
+        // For amounts 20250 and above, continue adding 25 for each 500 range
+        var baseAmount = 20250;
+        var baseDeduction = 1000;
+        var rangeSize = 500;
+        var additionalRanges = Math.floor((monthlyBasicPay - baseAmount) / rangeSize);
+        return baseDeduction + (additionalRanges * 25);
+    }
+}
+
+function calculateTaxDeductionJS(monthlyBasicPay) {
+    if (monthlyBasicPay < 10417) {
+        return 0;
+    } else if (monthlyBasicPay > 10417 && monthlyBasicPay <= 16666) {
+        return (0 + (0.15 * monthlyBasicPay));
+    } else if (monthlyBasicPay > 16666 && monthlyBasicPay <= 33332) {
+        return (937.50 + (0.20 * monthlyBasicPay));
+    } else if (monthlyBasicPay > 33332 && monthlyBasicPay <= 83332) {
+        return (4270.70 + (0.25 * monthlyBasicPay));
+    } else if (monthlyBasicPay > 83332 && monthlyBasicPay <= 333332) {
+        return (16770.70 + (0.30 * monthlyBasicPay));
+    } else if (monthlyBasicPay >= 333333) {
+        return (91770.70 + (0.35 * monthlyBasicPay));
+    }
+}
+
+function calculatePhilHealthDeductionJS(monthlyBasicPay) {
+    // PhilHealth deduction is 5% of basic pay divided by 2
+    return (monthlyBasicPay * 0.05) / 2;
+}
+
+function calculatePagIBIGDeductionJS() {
+    // Pag-IBIG deduction is always 200
+    return 200;
 }
 
 // Currency formatting

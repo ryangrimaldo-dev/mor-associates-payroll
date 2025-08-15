@@ -558,7 +558,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $html .= '</thead><tbody>';
                 
                 foreach ($rows as $row) {
-                    $tax_rate = $row['basic_pay'] > 0 ? ($row['tax_deduction'] / $row['basic_pay']) * 100 : 0;
+                    $tax_rate = $row['basic_pay'] > 0 ? ($row['tax_deduction'] / $row['basic_pay']) * 100 / 2: 0;
                     $tax_status = $row['tax_deduction'] > 0 ? 'Taxable' : 'Exempt';
                     $html .= '<tr>';
                     $html .= '<td>' . htmlspecialchars($row['period_name']) . '</td>';
