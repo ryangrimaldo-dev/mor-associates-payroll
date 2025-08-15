@@ -981,7 +981,6 @@ $payroll_records = $conn->query("
                                             <thead>
                                                 <tr>
                                                     <th>Days</th>
-                                                    <th>Type</th>
                                                     <th>Amount</th>
                                                     <th>Action</th>
                                                 </tr>
@@ -1034,7 +1033,6 @@ $payroll_records = $conn->query("
                                             <thead>
                                                 <tr>
                                                     <th>Hours</th>
-                                                    <th>Type</th>
                                                     <th>Amount</th>
                                                     <th>Actions</th>
                                                 </tr>
@@ -1729,7 +1727,6 @@ $payroll_records = $conn->query("
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${hours}</td>
-                    <td>${typeText}</td>
                     <td>₱${amount.toFixed(2)}</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-danger" onclick="removeOvertimeEntry(${index})">
@@ -2059,7 +2056,6 @@ $payroll_records = $conn->query("
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${days}</td>
-                    <td>${typeText}</td>
                     <td>₱${amount.toFixed(2)}</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-danger" onclick="removeDaysWorkedEntry(${index})">

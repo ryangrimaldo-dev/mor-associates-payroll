@@ -71,7 +71,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                         <?php endif; ?>
                         <span class="username-text"><?php echo htmlspecialchars($user['name']); ?></span>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end" style="display: none;">
+                    <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="logout.php">
                             <i class="fas fa-sign-out-alt me-2"></i>Logout
                         </a></li>
@@ -87,3 +87,4 @@ $current_page = basename($_SERVER['PHP_SELF']);
 <script src="assets/js/buttons.js"></script>
 <script src="assets/js/payroll-buttons.js"></script>
 <script src="assets/js/dropdown-init.js"></script>
+<script src="assets/js/theme-toggle.js"></script>

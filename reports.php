@@ -1527,18 +1527,20 @@ function getDepartmentReport($department) {
                                         <td><?php echo date('M d, Y', strtotime($row['generated_at'])); ?></td>
                                         <td>₱<?php echo number_format($row['total_amount'], 2); ?></td>
                                         <td>
-                                            <a href="<?php echo 'reports/' . $row['file_path']; ?>" class="btn btn-sm btn-primary" target="_blank" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <a href="<?php echo 'reports/' . $row['file_path']; ?>" class="btn btn-sm btn-success" download title="Download">
-                                                <i class="fas fa-download"></i>
-                                            </a>
-                                            <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this report?');">
-                                                <input type="hidden" name="action" value="delete_all_report">
-                                                <input type="hidden" name="report_id" value="<?php echo $row['id']; ?>">
-                                                <input type="hidden" name="file_path" value="<?php echo htmlspecialchars($row['file_path']); ?>">
-                                                <button type="submit" class="btn btn-sm btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
-                                            </form>
+                                            <div class="action-buttons">
+                                                <a href="<?php echo 'reports/' . $row['file_path']; ?>" class="btn btn-sm btn-primary" target="_blank" title="View">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="<?php echo 'reports/' . $row['file_path']; ?>" class="btn btn-sm btn-success" download title="Download">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                                <form method="POST" onsubmit="return confirm('Delete this report?');">
+                                                    <input type="hidden" name="action" value="delete_all_report">
+                                                    <input type="hidden" name="report_id" value="<?php echo $row['id']; ?>">
+                                                    <input type="hidden" name="file_path" value="<?php echo htmlspecialchars($row['file_path']); ?>">
+                                                    <button type="submit" class="btn btn-sm btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                     <?php endwhile; 
