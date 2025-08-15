@@ -253,6 +253,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $late_minutes = floatval($_POST['late_minutes'] ?? 0);
                 $overtime_entries_json = isset($_POST['overtime_entries_json']) ? $_POST['overtime_entries_json'] : '[]';
                 $overtime_entries = json_decode($overtime_entries_json, true);
+                error_log("DEBUG: Raw overtime JSON received: " . $overtime_entries_json);
+                error_log("DEBUG: Decoded overtime entries: " . print_r($overtime_entries, true));
+                error_log("DEBUG: JSON decode error: " . json_last_error_msg());
                 $allowances = floatval($_POST['allowances'] ?? 0);
                 $additional_payment = floatval($_POST['additional_payment'] ?? 0);
                 $sss_deduction = floatval($_POST['sss_deduction'] ?? 0);
@@ -325,23 +328,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Calculate payroll components
                 // Process days worked entries JSON to calculate accurate basic pay
                 $days_worked_entries_json = isset($_POST['days_worked_entries_json']) ? $_POST['days_worked_entries_json'] : '[]';
+                error_log("DEBUG: Raw days worked JSON received: " . $days_worked_entries_json);
                 $days_worked_entries = json_decode($days_worked_entries_json, true);
+                error_log("DEBUG: Decoded days worked entries: " . print_r($days_worked_entries, true));
+                error_log("DEBUG: JSON decode error for days worked: " . json_last_error_msg());
+                
+                // Process overtime entries JSON to calculate accurate overtime pay
+                $overtime_entries_json = isset($_POST['overtime_entries_json']) ? $_POST['overtime_entries_json'] : '[]';
+                $overtime_entries = json_decode($overtime_entries_json, true);
                 
                 $basic_pay = 0;
+                $total_days_worked = 0;
                 if (!empty($days_worked_entries) && is_array($days_worked_entries)) {
-                    // Calculate basic pay from days worked entries (matches frontend logic)
+                    // Calculate basic pay and total days from days worked entries (matches frontend logic)
                     foreach ($days_worked_entries as $entry) {
                         $days = floatval($entry['days'] ?? 0);
                         $rate = floatval($entry['rate'] ?? $daily_rate);
                         $basic_pay += $days * $rate;
+                        $total_days_worked += $days;
                     }
+                    // Update days_worked with the calculated total
+                    $days_worked = $total_days_worked;
                 } else {
                     // Fallback to simple calculation if no entries provided
                     $basic_pay = $daily_rate * $days_worked;
                 }
                 
                 $basic_pay = round($basic_pay, 2) + $additional_payment;
-                // Overtime pay is already calculated from the JSON entries
+                
+                // Calculate overtime pay from JSON entries
+                $overtime_pay = 0;
+                $total_overtime_hours = 0;
+                if (!empty($overtime_entries) && is_array($overtime_entries)) {
+                    error_log("DEBUG: Processing " . count($overtime_entries) . " overtime entries for calculation");
+                    foreach ($overtime_entries as $entry) {
+                        $hours = floatval($entry['hours'] ?? 0);
+                        $rate = floatval($entry['rate'] ?? 0);
+                        $amount = floatval($entry['amount'] ?? 0);
+                        error_log("DEBUG: Entry - Hours: $hours, Rate: $rate, Amount: $amount");
+                        $overtime_pay += $amount;
+                        $total_overtime_hours += $hours;
+                    }
+                    error_log("DEBUG: Total calculated overtime_pay: $overtime_pay");
+                } else {
+                    error_log("DEBUG: No overtime entries found for calculation - overtime_pay will be 0");
+                }
+                $overtime_pay = round($overtime_pay, 2);
+                error_log("DEBUG: Final overtime_pay after rounding: $overtime_pay");
                 
                 // Calculate late deduction: (late time / 8) / 60 * daily rate
                 $late_deduction = ($late_minutes / 8) / 60 * $daily_rate;
@@ -411,6 +444,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($stmt === false) {
                             throw new Exception('Database error: ' . $conn->error);
                         }
+                        error_log("DEBUG: Updating payroll_records with overtime_pay: $overtime_pay");
                         if (!$stmt->bind_param("ddddddddddddddddddii", $days_worked, $late_minutes, $basic_pay, $overtime_pay, $allowances, $additional_payment, $sss_deduction, $philhealth_deduction, $pagibig_deduction, $tax_deduction, $other_deductions, $loans_advances, $sss_loan, $hdmf_loan, $late_deduction, $total_deductions, $net_pay, $thirteenth_month_pay, $employee_id, $pay_period_id)) {
                             throw new Exception('Parameter binding error: ' . $stmt->error);
                         }
@@ -440,18 +474,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                         
                         // Insert overtime entries
+                        error_log("DEBUG: Overtime entries check - Count: " . count($overtime_entries));
+                        error_log("DEBUG: Overtime entries data: " . print_r($overtime_entries, true));
+                        
                         if (!empty($overtime_entries)) {
+                            error_log("DEBUG: Preparing overtime insertion for payroll_id: " . $payroll_id);
                             $overtime_stmt = $conn->prepare("INSERT INTO overtime_entries (payroll_record_id, overtime_hours, overtime_rate, overtime_pay, overtime_type) VALUES (?, ?, ?, ?, ?)");
                             
-                            foreach ($overtime_entries as $entry) {
-                                $hours = floatval($entry['hours']);
-                                $rate = floatval($entry['rate']);
-                                $amount = floatval($entry['amount']);
-                                $type = $entry['type'];
-                                
-                                $overtime_stmt->bind_param("iddds", $payroll_id, $hours, $rate, $amount, $type);
-                                $overtime_stmt->execute();
+                            if ($overtime_stmt === false) {
+                                error_log("DEBUG: Failed to prepare overtime statement: " . $conn->error);
+                            } else {
+                                foreach ($overtime_entries as $entry) {
+                                    $hours = floatval($entry['hours']);
+                                    $rate = floatval($entry['rate']);
+                                    $amount = floatval($entry['amount']);
+                                    $type = $entry['type'];
+                                    
+                                    error_log("DEBUG: Raw entry data: " . print_r($entry, true));
+                                    error_log("DEBUG: Inserting overtime - Hours: $hours, Rate: $rate, Amount: $amount, Type: $type");
+                                    
+                                    if ($overtime_stmt->bind_param("iddds", $payroll_id, $hours, $rate, $amount, $type)) {
+                                        if ($overtime_stmt->execute()) {
+                                            error_log("DEBUG: Overtime entry inserted successfully");
+                                        } else {
+                                            error_log("DEBUG: Failed to execute overtime insertion: " . $overtime_stmt->error);
+                                        }
+                                    } else {
+                                        error_log("DEBUG: Failed to bind overtime parameters: " . $overtime_stmt->error);
+                                    }
+                                }
                             }
+                        } else {
+                            error_log("DEBUG: No overtime entries to insert (empty array)");
                         }
                         
                         // Commit the transaction
@@ -934,8 +988,9 @@ $payroll_records = $conn->query("
                                             </tbody>
                                         </table>
                                     </div>
-                                    <!-- Hidden fields to store overtime data for form submission -->
+                                    <!-- Hidden fields to store data for form submission -->
                                     <input type="hidden" id="days_worked_entries_json" name="days_worked_entries_json" value="[]">
+                                    <input type="hidden" id="overtime_entries_json" name="overtime_entries_json" value="[]">
                                 </div> 
                                 <div class="mb-3">
                                     <label for="late_minutes" class="form-label">Late (Minutes)</label>
@@ -1418,6 +1473,83 @@ $payroll_records = $conn->query("
             // Add event listeners to the first overtime entry
             setupOvertimeEntryListeners(document.querySelector('.overtime-entry'));
             
+            // Add form submission handler to collect days worked entries
+            const payrollForm = document.getElementById('payrollForm');
+            if (payrollForm) {
+                payrollForm.addEventListener('submit', function(e) {
+                    // Always prevent default submission
+                    e.preventDefault();
+                    
+                    console.log('=== FORM SUBMISSION DEBUG ===');
+                    
+                    // Collect data immediately and synchronously
+                    collectDaysWorkedEntries();
+                    collectOvertimeEntries();
+                    
+                    // Force a small delay to ensure DOM updates
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            // Get the final values
+                            const overtimeField = document.getElementById('overtime_entries_json');
+                            const daysWorkedField = document.getElementById('days_worked_entries_json');
+                            
+                            console.log('Submitting with overtime data:', overtimeField?.value);
+                            console.log('Submitting with days worked data:', daysWorkedField?.value);
+                            
+                            // Create form data manually to ensure proper encoding
+                            const formData = new FormData();
+                            
+                            // Add all form fields manually
+                            const formElements = payrollForm.elements;
+                            for (let i = 0; i < formElements.length; i++) {
+                                const element = formElements[i];
+                                if (element.name && element.type !== 'submit') {
+                                    if (element.name === 'overtime_entries_json') {
+                                        formData.append(element.name, overtimeField?.value || '[]');
+                                        console.log('Added overtime_entries_json:', overtimeField?.value || '[]');
+                                    } else if (element.name === 'days_worked_entries_json') {
+                                        formData.append(element.name, daysWorkedField?.value || '[]');
+                                        console.log('Added days_worked_entries_json:', daysWorkedField?.value || '[]');
+                                    } else if (element.type === 'checkbox' || element.type === 'radio') {
+                                        if (element.checked) {
+                                            formData.append(element.name, element.value);
+                                        }
+                                    } else {
+                                        formData.append(element.name, element.value);
+                                    }
+                                }
+                            }
+                            
+                            // Debug: Log all FormData entries
+                            console.log('FormData contents:');
+                            for (let [key, value] of formData.entries()) {
+                                console.log(key + ':', value);
+                            }
+                            
+                            // Submit via fetch
+                            const formAction = payrollForm.getAttribute('action') || window.location.href;
+                            console.log('Form action URL:', formAction);
+                            
+                            fetch(formAction, {
+                                method: 'POST',
+                                body: formData
+                            }).then(response => {
+                                if (response.ok) {
+                                    // Redirect to avoid duplicate submission
+                                    window.location.href = window.location.href.split('?')[0];
+                                } else {
+                                    console.error('Form submission failed');
+                                    alert('Form submission failed. Please try again.');
+                                }
+                            }).catch(error => {
+                                console.error('Form submission error:', error);
+                                alert('Form submission error. Please try again.');
+                            });
+                        });
+                    });
+                });
+            }
+            
             // Add event listeners to the first days worked entry
             setupDaysWorkedEntryListeners(document.querySelector('.days-worked-entry'));
             
@@ -1610,8 +1742,8 @@ $payroll_records = $conn->query("
             // Show/hide the summary table
             summaryTable.style.display = hasValidEntries ? 'table' : 'none';
             
-            // Update the hidden JSON field
-            overtimeEntriesJson.value = JSON.stringify(overtimeData);
+            // Note: JSON field is managed by collectOvertimeEntries() function
+            // overtimeEntriesJson.value = JSON.stringify(overtimeData);
         }
         
         function removeOvertimeEntry(index) {
@@ -1688,7 +1820,164 @@ $payroll_records = $conn->query("
             
             // Update calculations
             calculatePayroll();
-            updateDaysWorkedSummary();
+        }
+
+        // Function to collect days worked entries and convert to JSON
+        function collectDaysWorkedEntries() {
+            const entries = document.querySelectorAll('.days-worked-entry');
+            const daysWorkedData = [];
+            
+            // Get daily rate
+            const employeeSelect = document.getElementById('employee_id');
+            let dailyRate = 0;
+            if (employeeSelect && employeeSelect.selectedIndex >= 0) {
+                dailyRate = parseFloat(employeeSelect.options[employeeSelect.selectedIndex].getAttribute('data-rate')) || 0;
+            }
+            
+            entries.forEach(function(entry) {
+                const daysInput = entry.querySelector('.days-worked-count');
+                const typeSelect = entry.querySelector('.days-worked-type');
+                
+                if (daysInput && typeSelect) {
+                    const days = parseFloat(daysInput.value) || 0;
+                    const type = typeSelect.value;
+                    
+                    if (days > 0) {
+                        // Calculate rate based on type
+                        let rate = dailyRate;
+                        switch(type) {
+                            case 'rest_day':
+                                rate = dailyRate * 1.3;
+                                break;
+                            case 'rest_day_special_holiday':
+                                rate = dailyRate * 1.5;
+                                break;
+                            case 'regular_holiday_ordinary_day':
+                                rate = dailyRate * 2.0;
+                                break;
+                            case 'rest_day_regular_holiday':
+                                rate = dailyRate * 2.6;
+                                break;
+                            case 'special_holiday_ordinary_day':
+                                rate = dailyRate * 1.3;
+                                break;
+                            default:
+                                rate = dailyRate;
+                        }
+                        
+                        daysWorkedData.push({
+                            days: days,
+                            type: type,
+                            rate: rate,
+                            amount: days * rate
+                        });
+                    }
+                }
+            });
+            
+            // Update the hidden JSON field
+            const jsonField = document.getElementById('days_worked_entries_json');
+            if (jsonField) {
+                jsonField.value = JSON.stringify(daysWorkedData);
+                console.log('Days worked entries collected:', daysWorkedData);
+            }
+        }
+
+        // Function to collect overtime entries and convert to JSON
+        function collectOvertimeEntries() {
+            console.log('=== COLLECT OVERTIME ENTRIES DEBUG ===');
+            const entries = document.querySelectorAll('.overtime-entry');
+            console.log('Found overtime entries:', entries.length);
+            const overtimeData = [];
+            
+            // Get daily rate for calculating overtime rates
+            const employeeSelect = document.getElementById('employee_id');
+            let dailyRate = 0;
+            if (employeeSelect && employeeSelect.selectedIndex >= 0) {
+                dailyRate = parseFloat(employeeSelect.options[employeeSelect.selectedIndex].getAttribute('data-rate')) || 0;
+            }
+            console.log('Daily rate:', dailyRate);
+            
+            entries.forEach(function(entry) {
+                const hoursInput = entry.querySelector('.overtime-hours');
+                const typeSelect = entry.querySelector('.overtime-type');
+                
+                if (hoursInput && typeSelect) {
+                    const hours = parseFloat(hoursInput.value) || 0;
+                    const type = typeSelect.value;
+                    
+                    console.log(`Processing entry: Hours=${hours}, Type=${type}`);
+                    
+                    if (hours > 0 && type !== '0') {
+                        // Calculate rate based on overtime type
+                        let rate = 0;
+                        const hourlyRate = dailyRate / 8; // Convert daily rate to hourly
+                        
+                        switch(type) {
+                            case 'ordinary_day_ot':
+                                rate = hourlyRate * 1.25;
+                                break;
+                            case 'rest_day_special_holiday_ot':
+                                rate = hourlyRate * 1.69;
+                                break;
+                            case 'rest_day_and_special_holiday_ot':
+                                rate = hourlyRate * 1.95;
+                                break;
+                            case 'regular_holiday_ordinary_day_ot':
+                                rate = hourlyRate * 2.6;
+                                break;
+                            case 'rest_day_regular_holiday_ot_special':
+                                rate = hourlyRate * 3.38;
+                                break;
+                            case 'night_differential_ordinary_day':
+                                rate = hourlyRate * 0.1;
+                                break;
+                            case 'night_differential_rest_day':
+                                rate = hourlyRate * 0.13;
+                                break;
+                            default:
+                                rate = hourlyRate * 1.25; // Default to ordinary OT
+                        }
+                        
+                        const amount = hours * rate;
+                        console.log(`Adding to overtimeData: Hours=${hours}, Rate=${rate}, Amount=${amount}, Type=${type}`);
+                        
+                        overtimeData.push({
+                            hours: hours,
+                            rate: rate,
+                            type: type,
+                            amount: amount
+                        });
+                    } else {
+                        console.log(`Skipping entry: Hours=${hours}, Type=${type} (invalid)`);
+                    }
+                }
+            });
+            
+            // Update the hidden JSON field
+            const jsonField = document.getElementById('overtime_entries_json');
+            if (jsonField) {
+                jsonField.value = JSON.stringify(overtimeData);
+                console.log('Overtime entries collected:', overtimeData);
+                console.log('Hidden field value set to:', jsonField.value);
+                
+                // Also log to server via AJAX for debugging
+                if (overtimeData.length > 0) {
+                    fetch('debug_log.php', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: 'message=FRONTEND: Collected ' + overtimeData.length + ' overtime entries: ' + JSON.stringify(overtimeData)
+                    });
+                } else {
+                    fetch('debug_log.php', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: 'message=FRONTEND: No overtime entries collected - entries found: ' + entries.length
+                    });
+                }
+            } else {
+                console.log('ERROR: overtime_entries_json field not found!');
+            }
         }
         
         function updateDaysWorkedSummary() {

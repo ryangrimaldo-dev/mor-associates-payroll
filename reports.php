@@ -397,24 +397,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $month_name = date('F', mktime(0, 0, 0, $month, 1));
                 $period_name = $month_name . ' ' . $year;
             
-            $html = '<h2>SSS Contribution Report - ' . $period_name . '</h2>';
-            $html .= '<table border="1" cellpadding="5" cellspacing="0" width="100%">';
-            $html .= '<thead><tr><th>Employee #</th><th>Name</th><th>Basic Pay</th><th>SSS Deduction</th></tr></thead><tbody>';
+            // Generate styled HTML matching annual/monthly report format
+            $html = '<h1 style="text-align: center; color: #01acc1;">SSS Contribution Report - ' . $period_name . '</h1>';
+            $html .= '<p style="text-align: center; margin-bottom: 30px;">Generated on ' . date('F d, Y') . '</p>';
             
+            // Calculate totals for summary
             $total_sss = 0;
+            $total_basic_pay = 0;
+            $total_employees = count($rows);
+            
             foreach ($rows as $row) {
+                $total_sss += $row['sss_deduction'];
+                $total_basic_pay += $row['basic_pay'];
+            }
+            
+            // Add summary section
+            $html .= '<div style="background: #f8f9fa; padding: 20px; margin-bottom: 30px; border-radius: 8px;">';
+            $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">SSS Contribution Summary</h3>';
+            $html .= '<div style="display: flex; justify-content: space-between; flex-wrap: wrap;">';
+            $html .= '<div style="margin-bottom: 10px;"><strong>Total Employees:</strong> ' . $total_employees . '</div>';
+            $html .= '<div style="margin-bottom: 10px;"><strong>Total Basic Pay:</strong> ₱' . number_format($total_basic_pay, 2) . '</div>';
+            $html .= '<div style="margin-bottom: 10px;"><strong>Total SSS Contributions:</strong> ₱' . number_format($total_sss, 2) . '</div>';
+            $html .= '<div style="margin-bottom: 10px;"><strong>Average SSS per Employee:</strong> ₱' . number_format($total_employees > 0 ? $total_sss / $total_employees : 0, 2) . '</div>';
+            $html .= '</div></div>';
+            
+            // Add detailed table
+            $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">Detailed SSS Contribution Records</h3>';
+            $html .= '<table border="1" cellpadding="8" cellspacing="0" width="100%" style="border-collapse: collapse; font-size: 12px;">';
+            $html .= '<thead style="background-color: #01acc1; color: white;">';
+            $html .= '<tr><th>Employee #</th><th>Employee Name</th><th>Department</th><th>Basic Pay</th><th>SSS EE Share</th><th>Contribution Rate</th></tr>';
+            $html .= '</thead><tbody>';
+            
+            foreach ($rows as $row) {
+                $contribution_rate = $row['basic_pay'] > 0 ? ($row['sss_deduction'] / $row['basic_pay']) * 100 : 0;
                 $html .= '<tr>';
                 $html .= '<td>' . htmlspecialchars($row['employee_number']) . '</td>';
                 $html .= '<td>' . htmlspecialchars($row['first_name'] . ' ' . $row['last_name']) . '</td>';
+                $html .= '<td>' . htmlspecialchars($row['department'] ?? 'N/A') . '</td>';
                 $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
                 $html .= '<td>₱' . number_format($row['sss_deduction'], 2) . '</td>';
+                $html .= '<td>' . number_format($contribution_rate, 2) . '%</td>';
                 $html .= '</tr>';
-                $total_sss += $row['sss_deduction'];
             }
             
             $html .= '</tbody>';
-            $html .= '<tfoot><tr><th colspan="3" style="text-align:right">Total SSS Contributions:</th><th>₱' . number_format($total_sss, 2) . '</th></tr></tfoot>';
-            $html .= '</table>';
+            $html .= '<tfoot style="background-color: #f8f9fa; font-weight: bold;">';
+            $html .= '<tr><td colspan="3" style="text-align: right;">TOTALS:</td><td>₱' . number_format($total_basic_pay, 2) . '</td><td>₱' . number_format($total_sss, 2) . '</td><td>-</td></tr>';
+            $html .= '</tfoot></table>';
             
             $mpdf->WriteHTML($html);
             
@@ -545,24 +574,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $month_name = date('F', mktime(0, 0, 0, $month, 1));
                 $period_name = $month_name . ' ' . $year;
             
-                $html = '<h2>Tax Deduction Report - ' . $period_name . '</h2>';
-                $html .= '<table border="1" cellpadding="5" cellspacing="0" width="100%">';
-                $html .= '<thead><tr><th>Employee #</th><th>Name</th><th>Basic Pay</th><th>Tax Deduction</th></tr></thead><tbody>';
+                // Generate styled HTML matching annual/monthly report format
+                $html = '<h1 style="text-align: center; color: #01acc1;">Tax Deduction Report - ' . $period_name . '</h1>';
+                $html .= '<p style="text-align: center; margin-bottom: 30px;">Generated on ' . date('F d, Y') . '</p>';
                 
+                // Calculate totals for summary
                 $total_tax = 0;
+                $total_basic_pay = 0;
+                $total_employees = count($rows);
+                $employees_with_tax = 0;
+                
                 foreach ($rows as $row) {
+                    $total_tax += $row['tax_deduction'];
+                    $total_basic_pay += $row['basic_pay'];
+                    if ($row['tax_deduction'] > 0) {
+                        $employees_with_tax++;
+                    }
+                }
+                
+                // Add summary section
+                $html .= '<div style="background: #f8f9fa; padding: 20px; margin-bottom: 30px; border-radius: 8px;">';
+                $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">Tax Deduction Summary</h3>';
+                $html .= '<div style="display: flex; justify-content: space-between; flex-wrap: wrap;">';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Total Employees:</strong> ' . $total_employees . '</div>';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Employees with Tax:</strong> ' . $employees_with_tax . '</div>';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Total Basic Pay:</strong> ₱' . number_format($total_basic_pay, 2) . '</div>';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Total Tax Deductions:</strong> ₱' . number_format($total_tax, 2) . '</div>';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Average Tax Rate:</strong> ' . number_format($total_basic_pay > 0 ? ($total_tax / $total_basic_pay) * 100 : 0, 2) . '%</div>';
+                $html .= '</div></div>';
+                
+                // Add detailed table
+                $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">Detailed Tax Deduction Records</h3>';
+                $html .= '<table border="1" cellpadding="8" cellspacing="0" width="100%" style="border-collapse: collapse; font-size: 12px;">';
+                $html .= '<thead style="background-color: #01acc1; color: white;">';
+                $html .= '<tr><th>Employee #</th><th>Employee Name</th><th>Department</th><th>Basic Pay</th><th>Tax Deduction</th><th>Tax Rate</th><th>Status</th></tr>';
+                $html .= '</thead><tbody>';
+                
+                foreach ($rows as $row) {
+                    $tax_rate = $row['basic_pay'] > 0 ? ($row['tax_deduction'] / $row['basic_pay']) * 100 : 0;
+                    $tax_status = $row['tax_deduction'] > 0 ? 'Taxable' : 'Exempt';
                     $html .= '<tr>';
                     $html .= '<td>' . htmlspecialchars($row['employee_number']) . '</td>';
                     $html .= '<td>' . htmlspecialchars($row['first_name'] . ' ' . $row['last_name']) . '</td>';
+                    $html .= '<td>' . htmlspecialchars($row['department'] ?? 'N/A') . '</td>';
                     $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
                     $html .= '<td>₱' . number_format($row['tax_deduction'], 2) . '</td>';
+                    $html .= '<td>' . number_format($tax_rate, 2) . '%</td>';
+                    $html .= '<td>' . $tax_status . '</td>';
                     $html .= '</tr>';
-                    $total_tax += $row['tax_deduction'];
                 }
-            
+                
                 $html .= '</tbody>';
-                $html .= '<tfoot><tr><th colspan="3" style="text-align:right">Total Tax Deductions:</th><th>₱' . number_format($total_tax, 2) . '</th></tr></tfoot>';
-                $html .= '</table>';
+                $html .= '<tfoot style="background-color: #f8f9fa; font-weight: bold;">';
+                $html .= '<tr><td colspan="3" style="text-align: right;">TOTALS:</td><td>₱' . number_format($total_basic_pay, 2) . '</td><td>₱' . number_format($total_tax, 2) . '</td><td>-</td><td>-</td></tr>';
+                $html .= '</tfoot></table>';
                 
                 $mpdf->WriteHTML($html);
                 
@@ -693,24 +758,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $month_name = date('F', mktime(0, 0, 0, $month, 1));
                 $period_name = $month_name . ' ' . $year;
                 
-                $html = '<h2>PhilHealth Contribution Report - ' . $period_name . '</h2>';
-                $html .= '<table border="1" cellpadding="5" cellspacing="0" width="100%">';
-                $html .= '<thead><tr><th>Employee #</th><th>Name</th><th>Basic Pay</th><th>PhilHealth Deduction</th></tr></thead><tbody>';
-            
+                // Generate styled HTML matching annual/monthly report format
+                $html = '<h1 style="text-align: center; color: #01acc1;">PhilHealth Contribution Report - ' . $period_name . '</h1>';
+                $html .= '<p style="text-align: center; margin-bottom: 30px;">Generated on ' . date('F d, Y') . '</p>';
+                
+                // Calculate totals for summary
                 $total_philhealth = 0;
+                $total_basic_pay = 0;
+                $total_employees = count($rows);
+                $employees_with_philhealth = 0;
+                
                 foreach ($rows as $row) {
+                    $total_philhealth += $row['philhealth_deduction'];
+                    $total_basic_pay += $row['basic_pay'];
+                    if ($row['philhealth_deduction'] > 0) {
+                        $employees_with_philhealth++;
+                    }
+                }
+                
+                // Add summary section
+                $html .= '<div style="background: #f8f9fa; padding: 20px; margin-bottom: 30px; border-radius: 8px;">';
+                $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">PhilHealth Contribution Summary</h3>';
+                $html .= '<div style="display: flex; justify-content: space-between; flex-wrap: wrap;">';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Total Employees:</strong> ' . $total_employees . '</div>';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Employees with PhilHealth:</strong> ' . $employees_with_philhealth . '</div>';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Total Basic Pay:</strong> ₱' . number_format($total_basic_pay, 2) . '</div>';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Total PhilHealth Contributions:</strong> ₱' . number_format($total_philhealth, 2) . '</div>';
+                $html .= '<div style="margin-bottom: 10px;"><strong>Average PhilHealth per Employee:</strong> ₱' . number_format($total_employees > 0 ? $total_philhealth / $total_employees : 0, 2) . '</div>';
+                $html .= '</div></div>';
+                
+                // Add detailed table
+                $html .= '<h3 style="color: #01acc1; margin-bottom: 15px;">Detailed PhilHealth Contribution Records</h3>';
+                $html .= '<table border="1" cellpadding="8" cellspacing="0" width="100%" style="border-collapse: collapse; font-size: 12px;">';
+                $html .= '<thead style="background-color: #01acc1; color: white;">';
+                $html .= '<tr><th>Employee #</th><th>Employee Name</th><th>Department</th><th>Basic Pay</th><th>PhilHealth Contribution</th><th>Contribution Rate</th><th>Status</th></tr>';
+                $html .= '</thead><tbody>';
+                
+                foreach ($rows as $row) {
+                    $contribution_rate = $row['basic_pay'] > 0 ? ($row['philhealth_deduction'] / $row['basic_pay']) * 100 : 0;
+                    $philhealth_status = $row['philhealth_deduction'] > 0 ? 'Covered' : 'Not Covered';
                     $html .= '<tr>';
                     $html .= '<td>' . htmlspecialchars($row['employee_number']) . '</td>';
                     $html .= '<td>' . htmlspecialchars($row['first_name'] . ' ' . $row['last_name']) . '</td>';
+                    $html .= '<td>' . htmlspecialchars($row['department'] ?? 'N/A') . '</td>';
                     $html .= '<td>₱' . number_format($row['basic_pay'], 2) . '</td>';
                     $html .= '<td>₱' . number_format($row['philhealth_deduction'], 2) . '</td>';
+                    $html .= '<td>' . number_format($contribution_rate, 2) . '%</td>';
+                    $html .= '<td>' . $philhealth_status . '</td>';
                     $html .= '</tr>';
-                    $total_philhealth += $row['philhealth_deduction'];
                 }
-            
+                
                 $html .= '</tbody>';
-                $html .= '<tfoot><tr><th colspan="3" style="text-align:right">Total PhilHealth Contributions:</th><th>₱' . number_format($total_philhealth, 2) . '</th></tr></tfoot>';
-                $html .= '</table>';
+                $html .= '<tfoot style="background-color: #f8f9fa; font-weight: bold;">';
+                $html .= '<tr><td colspan="3" style="text-align: right;">TOTALS:</td><td>₱' . number_format($total_basic_pay, 2) . '</td><td>₱' . number_format($total_philhealth, 2) . '</td><td>-</td><td>-</td></tr>';
+                $html .= '</tfoot></table>';
                 
                 $mpdf->WriteHTML($html);
                 

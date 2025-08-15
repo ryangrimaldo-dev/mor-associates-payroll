@@ -42,6 +42,16 @@ if ($result->num_rows !== 1) {
 }
 $p = $result->fetch_assoc();
 
+// Get overtime entries for this payroll record
+$overtime_stmt = $conn->prepare("SELECT SUM(overtime_hours) as total_overtime_hours, SUM(overtime_pay) as total_overtime_pay FROM overtime_entries WHERE payroll_record_id = ?");
+$overtime_stmt->bind_param("i", $payroll_id);
+$overtime_stmt->execute();
+$overtime_result = $overtime_stmt->get_result();
+$overtime_data = $overtime_result->fetch_assoc();
+
+$total_overtime_hours = $overtime_data['total_overtime_hours'] ?? 0;
+$total_overtime_pay = $overtime_data['total_overtime_pay'] ?? 0;
+
 function nf($n) { return '₱' . number_format($n, 2); }
 ?>
 <!DOCTYPE html>
@@ -93,7 +103,7 @@ function nf($n) { return '₱' . number_format($n, 2); }
             <div class="col-md-6 earnings">
                 <h5>EARNINGS</h5>
                 <div class="item"><span>Basic Pay (<?php echo $p['days_worked']; ?> days)</span><span><?php echo nf($p['basic_pay']); ?></span></div>
-                <div class="item"><span>Overtime Pay (<?php echo $p['overtime_hours']; ?> hrs)</span><span><?php echo nf($p['overtime_pay']); ?></span></div>
+                <div class="item"><span>Overtime Pay (<?php echo number_format($total_overtime_hours, 1); ?> hrs)</span><span><?php echo nf($total_overtime_pay); ?></span></div>
                 <div class="item"><span>Allowances</span><span><?php echo nf($p['allowances']); ?></span></div>
                 <div class="item total"><span>Total Earnings</span><span><?php echo nf($p['basic_pay'] + $p['overtime_pay'] + $p['allowances']); ?></span></div>
             </div>

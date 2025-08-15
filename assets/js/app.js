@@ -146,8 +146,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Payroll calculation function
 function calculatePayroll() {
-    // Check if essential elements exist before proceeding
-    if (!document.getElementById('daily_rate')) {
+    // Safety check to ensure essential elements exist
+    if (!document.getElementById('employee_id')) {
         console.warn('Essential payroll elements not found. Skipping calculation.');
         return;
     }
@@ -158,11 +158,14 @@ function calculatePayroll() {
         return element ? parseFloat(element.value || 0) : 0;
     }
     
-    var dailyRate = getElementValue('daily_rate');
-    var daysWorked = getElementValue('days_worked');
+    // Get employee daily rate
+    var employeeSelect = document.getElementById('employee_id');
+    var dailyRate = 0;
+    if (employeeSelect && employeeSelect.selectedIndex >= 0) {
+        dailyRate = parseFloat(employeeSelect.options[employeeSelect.selectedIndex].getAttribute('data-rate')) || 0;
+    }
+    
     var lateMinutes = getElementValue('late_minutes');
-    var overtimeHours = getElementValue('overtime_hours');
-    var overtimeRate = getElementValue('overtime_rate');
     var allowances = getElementValue('allowances');
     var additionalPayment = getElementValue('additional_payment');
     var sssDeduction = getElementValue('sss_deduction');
@@ -177,9 +180,79 @@ function calculatePayroll() {
     // Calculate late deduction: (late time / 8) / 60 * daily rate
     var lateDeduction = (lateMinutes / 8) / 60 * dailyRate;
     
-    // Calculate basic pay including additional payment (matches backend logic)
-    var basicPay = dailyRate * daysWorked + additionalPayment;
-    var overtimePay = overtimeHours * overtimeRate;
+    // Calculate basic pay from days worked entries
+    var basicPay = 0;
+    var daysWorkedEntries = document.querySelectorAll('.days-worked-entry');
+    daysWorkedEntries.forEach(function(entry) {
+        var days = parseFloat(entry.querySelector('.days-worked-count').value) || 0;
+        var type = entry.querySelector('.days-worked-type').value;
+        
+        if (days > 0) {
+            var rate = dailyRate;
+            switch(type) {
+                case 'rest_day':
+                    rate = dailyRate * 1.3;
+                    break;
+                case 'rest_day_special_holiday':
+                    rate = dailyRate * 1.5;
+                    break;
+                case 'regular_holiday_ordinary_day':
+                    rate = dailyRate * 2.0;
+                    break;
+                case 'rest_day_regular_holiday':
+                    rate = dailyRate * 2.6;
+                    break;
+                case 'special_holiday_ordinary_day':
+                    rate = dailyRate * 1.3;
+                    break;
+                default:
+                    rate = dailyRate;
+            }
+            basicPay += days * rate;
+        }
+    });
+    
+    basicPay += additionalPayment;
+    
+    // Calculate overtime pay from overtime entries
+    var overtimePay = 0;
+    var overtimeEntries = document.querySelectorAll('.overtime-entry');
+    overtimeEntries.forEach(function(entry) {
+        var hours = parseFloat(entry.querySelector('.overtime-hours').value) || 0;
+        var type = entry.querySelector('.overtime-type').value;
+        
+        if (hours > 0 && type !== '0') {
+            var hourlyRate = dailyRate / 8;
+            var rate = 0;
+            
+            switch(type) {
+                case 'ordinary_day_ot':
+                    rate = hourlyRate * 1.25;
+                    break;
+                case 'rest_day_special_holiday_ot':
+                    rate = hourlyRate * 1.69;
+                    break;
+                case 'rest_day_and_special_holiday_ot':
+                    rate = hourlyRate * 1.95;
+                    break;
+                case 'regular_holiday_ordinary_day_ot':
+                    rate = hourlyRate * 2.6;
+                    break;
+                case 'rest_day_regular_holiday_ot_special':
+                    rate = hourlyRate * 3.38;
+                    break;
+                case 'night_differential_ordinary_day':
+                    rate = hourlyRate * 0.1;
+                    break;
+                case 'night_differential_rest_day':
+                    rate = hourlyRate * 0.13;
+                    break;
+                default:
+                    rate = hourlyRate * 1.25;
+            }
+            overtimePay += hours * rate;
+        }
+    });
     
     // Calculate total deductions including all components (matches backend logic)
     var totalDeductions = sssDeduction + philhealthDeduction + pagibigDeduction + taxDeduction + otherDeductions + loansAdvances + sssLoan + hdmfLoan + lateDeduction;
@@ -194,6 +267,14 @@ function calculatePayroll() {
     updateResultField('total_deductions_result', totalDeductions);
     updateResultField('net_pay_result', netPay);
     updateResultField('thirteenth_month_result', thirteenthMonth);
+    
+    // Update the JSON fields for form submission
+    if (typeof collectDaysWorkedEntries === 'function') {
+        collectDaysWorkedEntries();
+    }
+    if (typeof collectOvertimeEntries === 'function') {
+        collectOvertimeEntries();
+    }
 }
 
 // Update result field with formatted currency
