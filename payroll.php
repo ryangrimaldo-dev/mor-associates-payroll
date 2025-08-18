@@ -84,7 +84,7 @@ function calculateSSSDeduction($monthly_basic_pay) {
         $base_amount = 20250;
         $base_deduction = 1000;
         $range_size = 500;
-        $additional_ranges = floor(($monthly_basic_pay - $base_amount) / $range_size);
+        $additional_ranges = ceil(($monthly_basic_pay - $base_amount) / $range_size);
         return $base_deduction + ($additional_ranges * 25);
     }
 }
@@ -1406,15 +1406,15 @@ $payroll_records = $conn->query("
             if (monthlyBasicPay < 10417) {
                 return 0;
             } else if (monthlyBasicPay >= 10417 && monthlyBasicPay <= 16666) {
-                return (0 + (0.15 * (monthlyBasicPay - 10417)));
+                return (0 + (0.15 * (monthlyBasicPay)));
             } else if (monthlyBasicPay > 16666 && monthlyBasicPay <= 33332) {
-                return (937.50 + (0.20 * (monthlyBasicPay - 16666)));
+                return (937.50 + (0.20 * monthlyBasicPay));
             } else if (monthlyBasicPay > 33332 && monthlyBasicPay <= 83332) {
-                return (4270.70 + (0.25 * (monthlyBasicPay - 33332)));
+                return (4270.70 + (0.25 * monthlyBasicPay));
             } else if (monthlyBasicPay > 83332 && monthlyBasicPay <= 333332) {
-                return (16770.70 + (0.30 * (monthlyBasicPay - 83332)));
+                return (16770.70 + (0.30 * monthlyBasicPay));
             } else if (monthlyBasicPay > 333332) {
-                return (91770.70 + (0.35 * (monthlyBasicPay - 333332)));
+                return (91770.70 + (0.35 * monthlyBasicPay));
             }
             return 0; // Default return for any edge cases
         }
