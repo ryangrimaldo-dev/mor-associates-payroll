@@ -17,17 +17,23 @@ A comprehensive web-based payroll management system built with PHP, MySQL, and B
 - **Rate Management**: Support for both daily and monthly rate structures
 
 #### Payroll Processing
-- **Automated Payroll Calculation**: Calculate gross pay, deductions, and net pay
-- **Pay Period Management**: Create and manage different pay periods
+- **Automated Payroll Calculation**: Calculate gross pay, deductions, and net pay with precision
+- **Pay Period Management**: Supports 15th and 30th/31st period combinations for accurate monthly calculations
 - **Multiple Rate Types**: Support for daily and monthly salary structures
 - **Automatic Deductions**: 
-  - SSS (Social Security System) contributions
-  - PhilHealth contributions
-  - Pag-IBIG contributions
-  - Withholding tax calculations
-- **Custom Deductions**: Add custom deductions as needed
-- **Overtime Calculations**: Handle overtime pay calculations
-- **Payroll Approval Workflow**: Multi-step approval process for payroll
+  - **SSS Contributions**: Automatic calculation with MPF-ER and MPF-EE components
+  - **PhilHealth Contributions**: Accurate premium calculations based on salary brackets
+  - **Pag-IBIG Contributions**: Member savings and loan deductions
+  - **Withholding Tax**: Automated tax calculations based on BIR tax tables
+- **Loan Management**:
+  - MPII Savings (HDMF Loan) tracking
+  - Calamity Loan processing
+  - Multi-Purpose Loan management
+- **Overtime System**:
+  - Multiple overtime types (ordinary day, rest day, holiday, etc.)
+  - Accurate rate calculations
+  - Detailed overtime entry and tracking
+- **Payroll Period Combination**: Automatic combination of 15th and 30th period basic pay for accurate monthly deductions
 - **Bulk Payroll Processing**: Process payroll for multiple employees simultaneously
 
 #### Payslip Management
@@ -38,12 +44,17 @@ A comprehensive web-based payroll management system built with PHP, MySQL, and B
 - **Custom Payslip Numbers**: Unique identification for each payslip
 
 #### Reporting & Analytics
+- **Compliance Reports**:
+  - **SSS Report**: Detailed SSS contributions with MPF-ER and MPF-EE calculations
+  - **Pag-IBIG Report**: Complete Pag-IBIG contributions and loan deductions
+  - **PhilHealth Report**: Premium contributions and matching
+  - **BIR Tax Report**: Tax withholding and remittance details
 - **Monthly Reports**: Generate comprehensive monthly payroll reports
-- **Annual Reports**: Year-end payroll summaries and analytics
-- **Department Reports**: Payroll analysis by department
-- **Employee Reports**: Individual employee payroll history
+- **Annual Reports**: Year-end payroll summaries and analytics (BIR Form 2316)
+- **Department Reports**: Payroll analysis by department with cost center breakdown
+- **Employee Reports**: Individual payroll history and earnings statements
 - **Export Functionality**: Export reports to PDF and CSV formats
-- **Real-time Analytics**: Dashboard with payroll insights
+- **Real-time Analytics**: Interactive dashboard with payroll metrics and trends
 
 #### User Management & Access Control
 - **Role-Based Access**: Admin and Employee role distinctions
@@ -83,12 +94,14 @@ A comprehensive web-based payroll management system built with PHP, MySQL, and B
 - **File Upload Security**: Secure handling of file uploads
 
 ### Web Security Headers
-- **Content Security Policy (CSP)**: Prevents XSS and code injection
-- **X-XSS-Protection**: Browser-level XSS protection
-- **X-Content-Type-Options**: MIME type sniffing protection
-- **X-Frame-Options**: Clickjacking protection
-- **Referrer-Policy**: Control referrer information
-- **HSTS**: HTTP Strict Transport Security (for production)
+- **Content Security Policy (CSP)**: Strict policy preventing XSS and code injection
+- **X-XSS-Protection**: Browser-level XSS protection with block mode
+- **X-Content-Type-Options**: MIME type sniffing protection (nosniff)
+- **X-Frame-Options**: SAMEORIGIN to prevent clickjacking
+- **Referrer-Policy**: Strict origin-when-cross-origin
+- **HSTS**: HTTP Strict Transport Security with preload and includeSubDomains
+- **Feature-Policy**: Controls browser features and APIs
+- **Expect-CT**: Certificate Transparency enforcement
 
 ### Environment & Configuration Security
 - **Environment Variables**: Sensitive data stored in `.env` file
@@ -98,8 +111,16 @@ A comprehensive web-based payroll management system built with PHP, MySQL, and B
 
 ### Server Security
 - **Directory Listing Disabled**: Prevents directory browsing
-- **Error Handling**: Custom error pages and logging
-- **File Permissions**: Proper file and directory permissions
+- **Error Handling**: Custom error pages with secure logging
+- **File Permissions**: Strict file and directory permissions (750 for directories, 640 for files)
+- **SQL Injection Protection**: Prepared statements and parameterized queries
+- **CSRF Protection**: Token-based protection on all forms
+- **Input Validation**: Strict validation of all user inputs
+- **Output Encoding**: Context-aware output encoding to prevent XSS
+- **Secure Session Handling**:
+  - HTTP-only and Secure flags on cookies
+  - Session timeout and regeneration
+  - Session fixation protection
 
 ## 📋 Installation & Setup
 
