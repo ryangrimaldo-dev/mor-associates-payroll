@@ -351,13 +351,34 @@ a:hover {
     outline: none;
 }
 
+/* Daily Rate Display */
+#daily_rate_display {
+    color: white;
+}
+
+#username {
+    color: white;
+}
+
+#password {
+    color: white;
+}
+
+#confirm_password {
+    color: white;
+}
+
+#email {
+    color: white;
+}
+
 .username-text {
     font-size: var(--text-sm);
     max-width: 100px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: inline-block;
+    display: inline-block;  
     vertical-align: middle;
 }
 
